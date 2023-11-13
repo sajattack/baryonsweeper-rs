@@ -1,0 +1,8 @@
+[workspace]
+
+members = [
+    "baryonsweeper",
+    "baryonsweeper-rp2040"
+]
+
+resolver = "2"
