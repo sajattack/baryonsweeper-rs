@@ -310,7 +310,10 @@ where
                 _ => {
                     self.send_packet(ResponseType::Nak as u8, &[0], 0);   
                 }
+
            }
+
+           self.led_pin.set_high().map_err(|_|()).unwrap();
 
         }
     }
