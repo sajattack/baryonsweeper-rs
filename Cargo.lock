@@ -26,10 +26,44 @@ dependencies = [
 ]
 
 [[package]]
+name = "apa102-spi"
+version = "0.3.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d92cd690fd2aae5bc549e2dc392d9082aab3ccf851aa39b0ab84b2934f4c57a3"
+dependencies = [
+ "embedded-hal",
+ "smart-leds-trait",
+]
+
+[[package]]
 name = "arrayvec"
 version = "0.7.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "96d30a06541fbafbc7f82ed10c06164cfbd2c401138f6addd8404629c4b16711"
+
+[[package]]
+name = "atsamd-hal"
+version = "0.14.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1cddc374559f476b8225083732b400544075c67616e1b1e1635b0efe84bef158"
+dependencies = [
+ "atsamd21g",
+ "bitfield",
+ "bitflags",
+ "cortex-m",
+ "embedded-hal",
+ "modular-bitfield",
+ "nb 0.1.3",
+ "num-traits",
+ "paste",
+ "rand_core 0.5.1",
+ "replace_with",
+ "seq-macro 0.2.2",
+ "typenum",
+ "usb-device",
+ "vcell",
+ "void",
+]
 
 [[package]]
 name = "atsamd-hal"
@@ -50,12 +84,24 @@ dependencies = [
  "num-traits",
  "opaque-debug",
  "paste",
- "rand_core",
- "seq-macro",
+ "rand_core 0.6.4",
+ "seq-macro 0.3.5",
  "typenum",
  "usb-device",
  "vcell",
  "void",
+]
+
+[[package]]
+name = "atsamd21g"
+version = "0.11.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3dc9d19869bcd08caab8328a4dc4dc99d4f0216653d8d63963847a03ce87654c"
+dependencies = [
+ "bare-metal",
+ "cortex-m",
+ "cortex-m-rt",
+ "vcell",
 ]
 
 [[package]]
@@ -92,10 +138,24 @@ dependencies = [
  "embedded-hal",
  "fugit",
  "heapless",
+ "itsybitsy_m0",
  "nb 1.1.0",
  "num_enum 0.7.1",
  "rtt-target",
  "ufmt",
+ "usb-device",
+ "usbd-serial",
+]
+
+[[package]]
+name = "baryonsweeper-itsybitsy_m0"
+version = "0.1.0"
+dependencies = [
+ "baryonsweeper",
+ "fugit",
+ "itsybitsy_m0",
+ "panic-rtt-target",
+ "rtt-target",
  "usb-device",
  "usbd-serial",
 ]
@@ -129,6 +189,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "bitbang-hal"
+version = "0.3.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "470e1522d257e4c76245980d27d5d279442cb18955cc6341249b904074033f4a"
+dependencies = [
+ "embedded-hal",
+ "nb 0.1.3",
+]
+
+[[package]]
 name = "bitfield"
 version = "0.13.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -139,6 +209,12 @@ name = "bitflags"
 version = "1.3.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "bef38d45163c2f1dde094a7dfd33ccf595c92905c8f8f4fdc18d06fb1037718a"
+
+[[package]]
+name = "bytemuck"
+version = "1.14.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "374d28ec25809ee0e23827c2ab573d729e293f281dfe393500e7ad618baa61c6"
 
 [[package]]
 name = "byteorder"
@@ -413,6 +489,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "itsybitsy_m0"
+version = "0.13.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ffb0011fc3680ff7529d992dca12746f3e324b2e42c52bccfeda97ff95f46ad2"
+dependencies = [
+ "apa102-spi",
+ "atsamd-hal 0.14.0",
+ "bitbang-hal",
+ "cortex-m-rt",
+ "smart-leds",
+ "usb-device",
+]
+
+[[package]]
 name = "libc"
 version = "0.2.150"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -424,7 +514,7 @@ version = "0.12.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5b42b0c4d33bfd7816ed0881fa7f08b32548192033ae309723b21e9b35894249"
 dependencies = [
- "atsamd-hal",
+ "atsamd-hal 0.16.0",
  "cortex-m-rt",
  "usb-device",
 ]
@@ -601,9 +691,30 @@ dependencies = [
 
 [[package]]
 name = "rand_core"
+version = "0.5.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "90bde5296fc891b0cef12a6d03ddccc162ce7b2aff54160af9338f8d40df6d19"
+
+[[package]]
+name = "rand_core"
 version = "0.6.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ec0be4795e2f6a28069bec0b5ff3e2ac9bafc99e6a9a7dc3547996c5c816922c"
+
+[[package]]
+name = "replace_with"
+version = "0.1.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e3a8614ee435691de62bcffcf4a66d91b3594bf1428a5722e79103249a095690"
+
+[[package]]
+name = "rgb"
+version = "0.8.37"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "05aaa8004b64fd573fc9d002f4e632d51ad4f026c2b5ba95fcb6c2f32c2c47d8"
+dependencies = [
+ "bytemuck",
+]
 
 [[package]]
 name = "rp-pico"
@@ -643,7 +754,7 @@ dependencies = [
  "nb 1.1.0",
  "paste",
  "pio",
- "rand_core",
+ "rand_core 0.6.4",
  "rp2040-hal-macros",
  "rp2040-pac",
  "usb-device",
@@ -711,9 +822,33 @@ checksum = "388a1df253eca08550bef6c72392cfe7c30914bf41df5269b68cbd6ff8f570a3"
 
 [[package]]
 name = "seq-macro"
+version = "0.2.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5a9f47faea3cad316faa914d013d24f471cd90bfca1a0c70f05a3f42c6441e99"
+
+[[package]]
+name = "seq-macro"
 version = "0.3.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a3f0bf26fd526d2a95683cd0f87bf103b8539e2ca1ef48ce002d67aad59aa0b4"
+
+[[package]]
+name = "smart-leds"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "38dd45fa275f70b4110eac5f5182611ad384f88bb22b68b9a9c3cafd7015290b"
+dependencies = [
+ "smart-leds-trait",
+]
+
+[[package]]
+name = "smart-leds-trait"
+version = "0.2.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ebf6d833fa93f16a1c1874e62c2aebe8567e5bdd436d59bf543ed258b6f7a8e3"
+dependencies = [
+ "rgb",
+]
 
 [[package]]
 name = "stable_deref_trait"

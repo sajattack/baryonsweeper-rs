@@ -3,7 +3,8 @@
 members = [
     "baryonsweeper",
     "baryonsweeper-rp2040",
-    "baryonsweeper-metro_m4"
+    "baryonsweeper-metro_m4",
+    "baryonsweeper-itsybitsy_m0"
 ]
 
 resolver = "2"

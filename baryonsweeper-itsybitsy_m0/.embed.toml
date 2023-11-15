@@ -1,0 +1,8 @@
+[default.probe]
+protocol = "Swd"
+
+[default.general]
+chip = "ATSAMD21G18A"
+
+[default.rtt]
+enabled = true
