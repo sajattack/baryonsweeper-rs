@@ -1,47 +1,58 @@
 #![no_std]
 
 use embedded_hal::{serial::{Read, Write}, timer::CountDown, digital::v2::OutputPin};
-use fugit::ExtU32;
+//use fugit::ExtU64;
 use nb::block;
 use aes::Aes128;
 use aes::cipher::{
     BlockEncrypt, KeyInit,
     generic_array::GenericArray,
 };
+use usb_device::{class_prelude::UsbBus, UsbError};
+use usbd_serial::SerialPort;
 use num_enum::TryFromPrimitive;
 
+use rtt_target::{rprint, rprintln};
 
-use core::result::{Result::{self, Ok, Err}};
-use core::option::{Option::{self, Some, None}};
-use core::convert::{From, Into, TryInto};
+use core::result::Result::{self, Ok, Err};
+use core::option::Option::{self, Some, None};
+use core::convert::{From, TryInto};
 use core::unreachable;
 
 mod consts;
 
 use consts::*;
 
-pub struct BaryonSweeper<S, T, P> 
+pub struct BaryonSweeper<'a, S, C, P, U, T> 
 where 
     S: Read<u8> + Write<u8>,
-    T: CountDown,
+    C: CountDown,
     P: OutputPin,
+    U: UsbBus,
+    T: From<fugit::MicrosDurationU64> + Clone,
 {
     serial: S,
-    timer: T,
+    timer: C,
     led_pin: P,
+    usb_serial: &'a mut SerialPort<'a, U>,
+    timeout: T,
 }
     
-impl<S, T, P> BaryonSweeper<S, T, P> 
+impl<'a, S, C, P, U, T> BaryonSweeper<'a, S, C, P, U, T>
 where 
     S: Read<u8> + Write<u8>,
-    T: CountDown,
-    P: OutputPin
+    C: CountDown,
+    P: OutputPin,
+    U: UsbBus,
+    T: From<fugit::MicrosDurationU64> + Clone,
 {
-    pub fn new(serial: S, timer: T, led_pin: P) -> BaryonSweeper<S, T, P> {
+    pub fn new(serial: S, timer: C, led_pin: P, usb_serial: &'a mut SerialPort<'a, U>, timeout: T) -> BaryonSweeper<'a, S, C, P, U, T> {
         Self {
             serial,
             timer,
             led_pin,
+            usb_serial,
+            timeout,
         }
     }
 
@@ -139,15 +150,15 @@ where
     }
 
 
-    fn read_with_timeout<TIME>
+    fn read_with_timeout
         (
             &mut self,
-            timeout: TIME
+            timeout: T,
         ) -> Result<u8, ()>
-        where TIME: Into<fugit::MicrosDurationU64>,
-        <T as CountDown>::Time: From<fugit::Duration<u64, 1, 1000000>>
+        where
+        T: core::convert::From<fugit::MicrosDurationU64> ,<C as CountDown>::Time: From<T>
     {
-        self.timer.start(timeout.into());
+        self.timer.start(timeout);
 
         loop {
             match self.serial.read() {
@@ -176,9 +187,10 @@ where
 
     fn receive_packet(&mut self, recv: &mut [u8], len: &mut u8)
     where
-    <T as CountDown>::Time: From<fugit::Duration<u64, 1, 1000000>>
+    T: core::convert::From<fugit::MicrosDurationU64> ,<C as CountDown>::Time: From<T>
     {
         loop {
+            self.log("Waiting for 5a");
             if let Ok(0x5a) = block!(self.serial.read())  {
                 break;
             }
@@ -186,40 +198,67 @@ where
         let length = block!(self.serial.read()).map_err(|_|()).unwrap();
         *len = length-1;
 
+        let mut msg = heapless::String::<256>::new();
+        ufmt::uwrite!(msg, "Received packet: [0x5a, 0x{:02x}, ", length).unwrap();
         for i in 0..length {
-            let res = self.read_with_timeout(500.millis());
+            let res = self.read_with_timeout(self.timeout.clone());
             if res.is_err() {
                 *len = 0;
                 return;
             }
             else {
-                recv[i as usize] = res.unwrap()
+                recv[i as usize] = res.unwrap();
+                ufmt::uwrite!(msg, "0x{:02x}, ", recv[i as usize]).unwrap();
             }
         }
+        ufmt::uwrite!(msg, "]").unwrap();
+        self.log(msg.as_str());
     }
 
     fn send_packet(&mut self, code: u8, packet: &[u8], length: usize) {
+        let mut msg = heapless::String::<256>::new();
+        ufmt::uwrite!(msg, "Sending packet: [0xA5, 0x{:02x}, 0x{:02x}, ", length+2, code).unwrap();
+
         block!(self.serial.write(0xA5)).map_err(|_| ()).unwrap();
         block!(self.serial.write(length as u8 + 2)).map_err(|_| ()).unwrap();
         block!(self.serial.write(code)).map_err(|_| ()).unwrap();
         let mut sum: u8 = 0xA5 + code + length as u8 + 2;
         for i in 0..length {
+            ufmt::uwrite!(msg, "0x{:02x}, ", packet[i]).unwrap();
             block!(self.serial.write(packet[i])).map_err(|_| ()).unwrap();
             sum += packet[i];
         }
         block!(self.serial.write(!sum)).map_err(|_| ()).unwrap();
+        ufmt::uwrite!(msg, "0x{:02x}]", !sum).unwrap();
+        self.log(msg.as_str());
+    }
+
+    fn log(&mut self, msg: &str) {
+        rprintln!("{}", msg);
+        let mut string = heapless::String::<256>::from_utf8(heapless::Vec::<u8, 256>::from_slice(msg.as_bytes()).unwrap()).unwrap();
+        string.push_str("\r\n").unwrap();
+        match self.usb_serial.write(string.as_bytes()) {
+            Ok(_count) => {
+                // count bytes were written
+            },
+            Err(UsbError::WouldBlock) => { rtt_target::rprintln!("USB buffer full") },
+            Err(err) => { rtt_target::rprintln!("{:?}", err) }
+        };
     }
 
     pub fn sweep(&mut self) 
     where
-    <T as CountDown>::Time: From<fugit::Duration<u64, 1, 1000000>>
+    T: core::convert::From<fugit::MicrosDurationU64>, <C as CountDown>::Time: From<T>
     {
 
         let mut recv: [u8;256];
         let mut length: u8;
         let mut challenge_version: u8;
 
+        self.log("Beginning the sweep!");
+
         loop {
+           self.log("Sweepin!");
            recv = [0u8;256];
            length = 0;
            self.receive_packet(&mut recv, &mut length);
@@ -345,5 +384,3 @@ enum ResponseType {
     Nak = 5,
     Ack,
 }
-
-

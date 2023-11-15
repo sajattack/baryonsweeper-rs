@@ -12,4 +12,9 @@ aes = { version = "0.8.3", default-features = false }
 nb = "1.1.0"
 fugit = "0.3.7"
 num_enum = { version = "0.7.1", default-features = false }
+usb-device = "0.2.0"
+usbd-serial = "0.1.0"
+rtt-target = { version = "0.3.1" }
+heapless = { version = "0.8.0", features=["ufmt"] }
+ufmt = "0.2.0"
 

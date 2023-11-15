@@ -17,6 +17,8 @@ panic-probe = { version = "0.3", features = ["print-defmt"] }
 rp-pico = "0.8"
 
 baryonsweeper = { path = "../baryonsweeper" }
+usbd-serial = "0.1.0"
+usb-device = "0.2.9"
 
 # cargo build/run
 [profile.dev]

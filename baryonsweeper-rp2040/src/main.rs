@@ -17,15 +17,21 @@ use rp_pico as bsp;
 
 use bsp::hal::{
     Clock,
-    clocks::{init_clocks_and_plls},
+    clocks::init_clocks_and_plls,
     pac,
     sio::Sio,
     watchdog::Watchdog,
     Timer,
     uart::{self, UartConfig, DataBits, StopBits},
-    fugit::RateExtU32,
+    fugit::{self, RateExtU32, ExtU64},
+    usb::UsbBus,
 };
 
+// USB Device support
+use usb_device::{class_prelude::*, prelude::*};
+
+// USB Communications Class Device support
+use usbd_serial::SerialPort;
 
 use baryonsweeper::BaryonSweeper;
 
@@ -79,7 +85,46 @@ fn main() -> ! {
         )
         .unwrap();
 
-    let mut baryon_sweeper = BaryonSweeper::new(uart, timer.count_down(), led_pin);
+    // Set up the USB driver
+    let usb_bus = UsbBusAllocator::new(UsbBus::new(
+        pac.USBCTRL_REGS,
+        pac.USBCTRL_DPRAM,
+        clocks.usb_clock,
+        true,
+        &mut pac.RESETS,
+    ));
+
+    // Set up the USB Communications Class Device driver
+    let mut usb_serial = SerialPort::new(&usb_bus);
+
+    // Create a USB device with a fake VID and PID
+    let mut usb_dev = UsbDeviceBuilder::new(&usb_bus, UsbVidPid(0x16c0, 0x27dd))
+        .manufacturer("sajattack")
+        .product("BaryonSweeper-rs")
+        .serial_number("TEST")
+        .device_class(2) // from: https://www.usb.org/defined-class-codes
+        .build();
+
+    if usb_dev.poll(&mut [&mut usb_serial]) {
+            let mut buf = [0u8; 64];
+            match usb_serial.read(&mut buf) {
+                Err(_e) => {
+                    // Do nothing
+                }
+                Ok(0) => {
+                    // Do nothing
+                }
+                Ok(_count) => {
+                    // Do nothing
+                }
+            }
+    }
+
+    usb_serial.write(b"Hello!\r\n").unwrap();
+
+    let timeout: fugit::MicrosDurationU64 = 500.millis().into();
+
+    let mut baryon_sweeper = BaryonSweeper::new(uart, timer.count_down(), led_pin, &mut usb_serial, timeout);
     baryon_sweeper.sweep();
     core::unreachable!()
 }
