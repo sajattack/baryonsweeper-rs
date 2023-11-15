@@ -17,4 +17,9 @@ usbd-serial = "0.1.0"
 rtt-target = { version = "0.3.1" }
 heapless = { version = "0.8.0", features=["ufmt"] }
 ufmt = "0.2.0"
+itsybitsy_m0 = { version = "0.13", optional=true }
 
+[features]
+metro_m4 = []
+rp2040 = []
+itsybitsy_m0 = ["dep:itsybitsy_m0"]

@@ -10,7 +10,7 @@ edition = "2021"
 chip = "ATSAMD21G18A"
 
 [dependencies]
-baryonsweeper = { path = "../baryonsweeper" }
+baryonsweeper = { path = "../baryonsweeper", features=["itsybitsy_m0"] }
 fugit = "0.3.7"
 itsybitsy_m0 = { version = "0.13.0", features=["usb"] }
 panic-rtt-target = { version = "0.1.2", features=["cortex-m"] }

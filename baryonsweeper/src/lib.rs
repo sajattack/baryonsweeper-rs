@@ -1,7 +1,6 @@
 #![no_std]
 
 use embedded_hal::{serial::{Read, Write}, timer::CountDown, digital::v2::OutputPin};
-//use fugit::ExtU64;
 use nb::block;
 use aes::Aes128;
 use aes::cipher::{
@@ -12,7 +11,7 @@ use usb_device::{class_prelude::UsbBus, UsbError};
 use usbd_serial::SerialPort;
 use num_enum::TryFromPrimitive;
 
-use rtt_target::{rprint, rprintln};
+use rtt_target::rprintln;
 
 use core::result::Result::{self, Ok, Err};
 use core::option::Option::{self, Some, None};
@@ -23,13 +22,22 @@ mod consts;
 
 use consts::*;
 
+#[cfg(feature="metro_m4")]
+type TimeoutType = fugit::NanosDurationU32;
+
+#[cfg(feature="rp2040")]
+type TimeoutType = fugit::MicrosDurationU64;
+
+#[cfg(feature="itsybitsy_m0")]
+type TimeoutType = itsybitsy_m0::hal::time::Nanoseconds;
+
 pub struct BaryonSweeper<'a, S, C, P, U, T> 
 where 
     S: Read<u8> + Write<u8>,
     C: CountDown,
     P: OutputPin,
     U: UsbBus,
-    T: From<fugit::MicrosDurationU64> + Clone,
+    T: From<TimeoutType> + Clone,
 {
     serial: S,
     timer: C,
@@ -44,7 +52,7 @@ where
     C: CountDown,
     P: OutputPin,
     U: UsbBus,
-    T: From<fugit::MicrosDurationU64> + Clone,
+    T: From<TimeoutType> + Clone,
 {
     pub fn new(serial: S, timer: C, led_pin: P, usb_serial: &'a mut SerialPort<'a, U>, timeout: T) -> BaryonSweeper<'a, S, C, P, U, T> {
         Self {
@@ -156,7 +164,7 @@ where
             timeout: T,
         ) -> Result<u8, ()>
         where
-        T: core::convert::From<fugit::MicrosDurationU64> ,<C as CountDown>::Time: From<T>
+        T: core::convert::From<TimeoutType> ,<C as CountDown>::Time: From<T>
     {
         self.timer.start(timeout);
 
@@ -187,7 +195,7 @@ where
 
     fn receive_packet(&mut self, recv: &mut [u8], len: &mut u8)
     where
-    T: core::convert::From<fugit::MicrosDurationU64> ,<C as CountDown>::Time: From<T>
+    T: core::convert::From<TimeoutType> ,<C as CountDown>::Time: From<T>
     {
         loop {
             self.log("Waiting for 5a");
@@ -248,7 +256,7 @@ where
 
     pub fn sweep(&mut self) 
     where
-    T: core::convert::From<fugit::MicrosDurationU64>, <C as CountDown>::Time: From<T>
+    T: core::convert::From<TimeoutType>, <C as CountDown>::Time: From<T>
     {
 
         let mut recv: [u8;256];

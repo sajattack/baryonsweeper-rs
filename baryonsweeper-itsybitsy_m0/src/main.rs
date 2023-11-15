@@ -43,7 +43,7 @@ fn main() -> ! {
     let gclk0 = clocks.gclk0();
     let tc45 = &clocks.tc4_tc5(&gclk0).unwrap();
     // instantiate a timer objec for the TC4 peripheral
-    let mut timer = TimerCounter::tc4_(tc45, peripherals.TC4, &mut pm);
+    let timer = TimerCounter::tc4_(tc45, peripherals.TC4, &mut pm);
 
 
     // Take peripheral and pins
