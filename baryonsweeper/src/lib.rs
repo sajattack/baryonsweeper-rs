@@ -78,7 +78,7 @@ where
                 data[i] = secret1.unwrap()[i];
             }
             for i in 0..8 {
-                data[7+i] = challenge[i];
+                data[8+i] = challenge[i];
             }
             Ok(())
         }
@@ -99,7 +99,7 @@ where
                 data[i] = secret2.unwrap()[i];
             }
             for i in 0..8 {
-                data[7+i] = challenge[i];
+                data[8+i] = challenge[i];
             }
             Ok(())
         }
