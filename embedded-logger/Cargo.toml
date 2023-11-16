@@ -1,0 +1,24 @@
+[package]
+name = "embedded-logger"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+heapless = { version = "0.8.0", features = ["ufmt"] }
+log = "0.4.20"
+rtt-logger = { version = "0.2.1", optional = true }
+rtt-target = { version = "0.3.1", optional = true }
+usb-device = { version = "0.2.9", optional = true }
+usbd-serial = { version = "0.1.1", optional = true }
+embedded-hal = { version = "0.2.5", optional = true }
+cfg-if = "1.0.0"
+ufmt = "0.2.0"
+
+[features]
+cortex-m = ["rtt-target/cortex-m", "rtt-logger"]
+riscv = ["rtt-target/riscv"]
+usb = ["usbd-serial", "usb-device"]
+rtt = ["rtt-target"]
+std = []

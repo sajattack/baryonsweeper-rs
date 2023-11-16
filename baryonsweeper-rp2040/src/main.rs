@@ -23,7 +23,7 @@ use bsp::hal::{
     watchdog::Watchdog,
     Timer,
     uart::{self, UartConfig, DataBits, StopBits},
-    fugit::{self, RateExtU32, ExtU64},
+    fugit::{RateExtU32, ExtU64},
     usb::UsbBus,
 };
 
@@ -122,9 +122,9 @@ fn main() -> ! {
 
     usb_serial.write(b"Hello!\r\n").unwrap();
 
-    let timeout: fugit::MicrosDurationU64 = 500.millis().into();
+    let logger = embedded_logger::CombinedLogger::<UsbBus,512>::new(&mut usb_serial);
+    let mut baryon_sweeper = BaryonSweeper::new(uart, timer.count_down(), led_pin, 500.millis(), logger);
 
-    let mut baryon_sweeper = BaryonSweeper::new(uart, timer.count_down(), led_pin, &mut usb_serial, timeout);
     baryon_sweeper.sweep();
     core::unreachable!()
 }

@@ -11,11 +11,12 @@ chip = "ATSAMD51J19A"
 
 [dependencies]
 baryonsweeper = { path = "../baryonsweeper", features=["metro_m4"]}
+embedded-logger = { path = "../embedded-logger", features=["cortex-m", "usb", "rtt"] }
 metro_m4 = { version = "0.12.0", features=["usb"] }
 panic-rtt-target = { version = "0.1.2", features=["cortex-m"] }
+usb-device = "0.2.9"
+usbd-serial = "0.1.1"
 rtt-target = { version = "0.3.1", features=["cortex-m"] }
-usb-device = "0.2.0"
-usbd-serial = "0.1.0"
 
 [profile.dev]
 debug = true

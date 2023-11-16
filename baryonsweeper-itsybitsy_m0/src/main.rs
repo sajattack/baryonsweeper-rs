@@ -3,7 +3,7 @@
 
 use baryonsweeper::BaryonSweeper;
 use panic_rtt_target as _;
-use rtt_target::{rtt_init_default, rtt_init_print};
+use rtt_target::rtt_init_print;
 use itsybitsy_m0 as bsp;
 
 use bsp::hal;
@@ -91,8 +91,9 @@ fn main() -> ! {
     let led_pin: bsp::RedLed = pins.d13.into();
 
     if let Some(usb_serial) = unsafe { USB_SERIAL.as_mut() } {
-        let timeout: hal::time::Nanoseconds = 500_000_000u32.ns();
-        let mut baryon_sweeper = BaryonSweeper::new(uart, timer, led_pin, usb_serial, timeout);
+        let timeout: hal::time::Nanoseconds = 500.ms().into();
+        let logger = embedded_logger::CombinedLogger::<UsbBus, 512>::new(usb_serial);
+        let mut baryon_sweeper = BaryonSweeper::new(uart, timer, led_pin, timeout, logger);
         baryon_sweeper.sweep();
     }
     core::unreachable!()

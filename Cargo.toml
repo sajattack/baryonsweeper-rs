@@ -4,7 +4,9 @@ members = [
     "baryonsweeper",
     "baryonsweeper-rp2040",
     "baryonsweeper-metro_m4",
-    "baryonsweeper-itsybitsy_m0"
+    "baryonsweeper-itsybitsy_m0",
+    "baryonsweeper-rpi_linux",
+    "embedded-logger",
 ]
 
 resolver = "2"
