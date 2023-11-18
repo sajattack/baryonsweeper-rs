@@ -328,7 +328,7 @@ where
                     let mut data2 = [0u8; 16];
                     let mut challenge2 = [0u8; 16];
                     let mut packet = [0u8; 16];
-                    let _ = self.mix_challenge2(challenge_version, &challenge1b, &mut data2);
+                    let _ = self.mix_challenge2(challenge_version, &challenge1b[0..8], &mut data2);
                     let _ = self.encrypt_bytes(&data2, challenge_version, &mut challenge2);
                     let _ = self.encrypt_bytes(&challenge2, challenge_version, &mut packet);
                     self.send_packet(ResponseType::Ack as u8, &packet[0..8], 8);
