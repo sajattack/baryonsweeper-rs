@@ -4,7 +4,7 @@
 #![no_std]
 #![no_main]
 
-use bsp::{entry};
+use bsp::{entry, hal};
 use defmt::*;
 use defmt_rtt as _;
 
@@ -18,7 +18,7 @@ use rp_pico as bsp;
 use bsp::hal::{
     Clock,
     clocks::init_clocks_and_plls,
-    pac,
+    pac::{self, interrupt},
     sio::Sio,
     watchdog::Watchdog,
     Timer,
@@ -27,6 +27,7 @@ use bsp::hal::{
     usb::UsbBus,
 };
 
+
 // USB Device support
 use usb_device::{class_prelude::*, prelude::*};
 
@@ -34,6 +35,16 @@ use usb_device::{class_prelude::*, prelude::*};
 use usbd_serial::SerialPort;
 
 use baryonsweeper::BaryonSweeper;
+
+/// The USB Device Driver (shared with the interrupt).
+static mut USB_DEVICE: Option<UsbDevice<hal::usb::UsbBus>> = None;
+
+/// The USB Bus Driver (shared with the interrupt).
+static mut USB_BUS: Option<UsbBusAllocator<hal::usb::UsbBus>> = None;
+
+/// The USB Serial Device Driver (shared with the interrupt).
+static mut USB_SERIAL: Option<SerialPort<hal::usb::UsbBus>> = None;
+
 
 #[entry]
 fn main() -> ! {
@@ -56,8 +67,6 @@ fn main() -> ! {
     )
     .ok()
     .unwrap();
-
-    //let mut delay = cortex_m::delay::Delay::new(core.SYST, clocks.system_clock.freq().to_Hz());
 
     let pins = bsp::Pins::new(
         pac.IO_BANK0,
@@ -86,45 +95,66 @@ fn main() -> ! {
         .unwrap();
 
     // Set up the USB driver
-    let usb_bus = UsbBusAllocator::new(UsbBus::new(
-        pac.USBCTRL_REGS,
-        pac.USBCTRL_DPRAM,
-        clocks.usb_clock,
-        true,
-        &mut pac.RESETS,
-    ));
+ 
+    unsafe {
+        pac::NVIC::unmask(hal::pac::Interrupt::USBCTRL_IRQ);
+
+        USB_BUS = Some(UsbBusAllocator::new(UsbBus::new(
+            pac.USBCTRL_REGS,
+            pac.USBCTRL_DPRAM,
+            clocks.usb_clock,
+            true,
+            &mut pac.RESETS,
+        )))
+    };
+
+    let usb_bus = unsafe { USB_BUS.as_mut().unwrap() };
+
 
     // Set up the USB Communications Class Device driver
-    let mut usb_serial = SerialPort::new(&usb_bus);
+    unsafe { 
+        USB_SERIAL = Some(SerialPort::new(usb_bus)); 
+        //USB_SERIAL.unwrap().write(b"Hello!\r\n").unwrap(); 
+    }
 
     // Create a USB device with a fake VID and PID
-    let mut usb_dev = UsbDeviceBuilder::new(&usb_bus, UsbVidPid(0x16c0, 0x27dd))
+    unsafe { USB_DEVICE = Some(UsbDeviceBuilder::new(usb_bus, UsbVidPid(0x16c0, 0x27dd))
         .manufacturer("sajattack")
         .product("BaryonSweeper-rs")
         .serial_number("TEST")
         .device_class(2) // from: https://www.usb.org/defined-class-codes
-        .build();
+        .build())
+    };
 
-    if usb_dev.poll(&mut [&mut usb_serial]) {
-            let mut buf = [0u8; 64];
-            match usb_serial.read(&mut buf) {
-                Err(_e) => {
-                    // Do nothing
-                }
-                Ok(0) => {
-                    // Do nothing
-                }
-                Ok(_count) => {
-                    // Do nothing
-                }
-            }
-    }
 
-    usb_serial.write(b"Hello!\r\n").unwrap();
 
-    let logger = embedded_logger::CombinedLogger::<UsbBus,512>::new(&mut usb_serial);
+    let usb_serial = unsafe { USB_SERIAL.as_mut().unwrap() };
+
+    let logger = embedded_logger::CombinedLogger::<UsbBus,512>::new(usb_serial);
     let mut baryon_sweeper = BaryonSweeper::new(uart, timer.count_down(), led_pin, 500.millis(), logger);
 
     baryon_sweeper.sweep();
     core::unreachable!()
 }
+
+#[allow(non_snake_case)]
+#[interrupt]
+unsafe fn USBCTRL_IRQ() {
+    let usb_dev = unsafe { USB_DEVICE.as_mut().unwrap() };
+    let usb_serial = unsafe { USB_SERIAL.as_mut().unwrap() };
+    if usb_dev.poll(&mut [usb_serial]) {
+        let mut buf = [0u8; 64];
+        match usb_serial.read(&mut buf) {
+            Err(_e) => {
+                // Do nothing
+            }
+            Ok(0) => {
+                // Do nothing
+            }
+            Ok(_count) => {
+                // Do nothing
+            }
+        }
+    }
+}
+
