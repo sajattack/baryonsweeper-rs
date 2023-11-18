@@ -134,7 +134,7 @@ fn main() -> ! {
 
     let usb_serial = unsafe { USB_SERIAL.as_mut().unwrap() };
 
-    let logger = embedded_logger::CombinedLogger::<UsbBus,512>::new(usb_serial);
+    let logger = embedded_logger::CombinedLogger::<UsbBus,256>::new(usb_serial);
     let mut baryon_sweeper = BaryonSweeper::new(uart, timer.count_down(), led_pin, 500.millis(), logger);
 
     baryon_sweeper.sweep();

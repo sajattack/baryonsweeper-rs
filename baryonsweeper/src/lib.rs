@@ -63,7 +63,7 @@ where
         }
     }
 
-    fn mix_challenge1(&self, version: u8, challenge: &[u8; 16], data: &mut [u8; 16]) -> Result<(), ()>
+    fn mix_challenge1(&self, version: u8, challenge: &[u8], data: &mut [u8]) -> Result<(), ()>
     {
         let mut secret1: Option<[u8;8]> = None;
         for i in 0..SECRETS1.len() {
@@ -84,7 +84,7 @@ where
         }
     }
 
-    fn mix_challenge2(&self, version: u8, challenge: &[u8; 16], data: &mut [u8; 16]) -> Result<(), ()>
+    fn mix_challenge2(&self, version: u8, challenge: &[u8], data: &mut [u8]) -> Result<(), ()>
     {
         let mut secret2: Option<[u8;8]> = None;
         for i in 0..SECRETS2.len() {
@@ -122,7 +122,7 @@ where
         }
     }
 
-    fn generate_response(&self, req: &[u8;16], resp: &mut [u8; 16], version: u8) -> Result<(), ()>
+    fn generate_response(&self, req: &[u8], resp: &mut [u8], version: u8) -> Result<(), ()>
     {
         let mut data: [u8; 16] = [0u8;16];
         if self.mix_challenge1(version, req, &mut data).is_err() {
@@ -135,7 +135,7 @@ where
         Ok(())
     }
 
-    fn check_response(&self, req: &[u8;16], resp: &mut [u8;16], version: u8) -> Result<(), ()>
+    fn check_response(&self, req: &[u8], resp: &mut [u8], version: u8) -> Result<(), ()>
     {
         let mut data: [u8; 16] = [0u8;16];
         if self.mix_challenge2(version, req, &mut data).is_err() {
@@ -250,7 +250,7 @@ where
 
         let mut recv: [u8;256];
         let mut length: u8;
-        let mut challenge_version: u8;
+        let mut challenge_version: u8 = 0;
 
         self.logger.log("Beginning the sweep!");
         self.logger.flush();
@@ -319,33 +319,42 @@ where
                 },
                 Ok(Commands::CmdAuth1) => {
                     challenge_version = recv[1];
-                    let mut challenge_response = [0u8; 16];
-                    let mut challenge_request = [0u8; 16];
-                    challenge_request[0] = recv[2];
-                    if self.generate_response(&challenge_request, &mut challenge_response, challenge_version).is_ok()
+                    let mut challenge_response = [0u8; 8];
+                    //let mut challenge_request = [0u8; 16];
+                    //challenge_request[0] = recv[2];
+                    if self.generate_response(&recv[2..], &mut challenge_response, challenge_version).is_ok()
                     {
                         let mut packet = [0u8;16];
                         packet[0..8].copy_from_slice(&challenge_response[0..8]);
                         packet[8..16].copy_from_slice(&BATTERY_NONCE);
                         self.send_packet(ResponseType::Ack as u8, &packet, packet.len());
+                        self.logger.log("CmdAuth1 Sending ACK!");
+                        self.logger.flush();
                     } else {
                         self.send_packet(ResponseType::Nak as u8, &[0], 0);   
+                        self.logger.log("CmdAuth1 Sending NAK!");
+                        self.logger.flush();
                     }
                 },
                 Ok(Commands::CmdAuth2) => {
-                    challenge_version = recv[1];
                     let mut challenge_response = [0u8; 16];
-                    let mut challenge_request = [0u8; 16];
-                    challenge_request[0] = recv[1];
-                    if self.check_response(&challenge_request, &mut challenge_response, challenge_version).is_ok()
+                    if self.check_response(&recv[1..], &mut challenge_response, challenge_version).is_ok()
                     {
                         self.send_packet(ResponseType::Ack as u8, &challenge_response, challenge_response.len());
+                        self.logger.log("CmdAuth2 Sending ACK!");
+                        self.logger.flush();
+
                     } else {
                         self.send_packet(ResponseType::Nak as u8, &[0], 0);   
+                        self.logger.log("CmdAuth2 Sending NAK!");
+                        self.logger.flush();
                     }
                 },
                 _ => {
                     self.send_packet(ResponseType::Nak as u8, &[0], 0);   
+                        self.logger.log("Sending General NAK!");
+                        self.logger.flush();
+
                 }
 
            }
