@@ -8,8 +8,6 @@ pub struct ChallengeKey {
     pub key: [u8;16]
 }
 
-pub const BATTERY_NONCE: [u8; 8] = [0xAA; 8];
-
 pub const SERIALNO: [u8; 4] = [0xFF; 4];
 
 pub const SECRETS1: [ChallengeSecret;15] = [

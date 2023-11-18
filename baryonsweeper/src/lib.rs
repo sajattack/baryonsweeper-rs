@@ -89,7 +89,7 @@ where
         let mut secret2: Option<[u8;8]> = None;
         for i in 0..SECRETS2.len() {
             if SECRETS2[i].version == version {
-                secret2 = Some(SECRETS1[i].secret);
+                secret2 = Some(SECRETS2[i].secret);
             }
         }
         if secret2.is_none() {
@@ -105,7 +105,7 @@ where
         }
     }
 
-    fn encrypt_bytes(&self, plain_bytes: &[u8; 16], version: u8, _enc_bytes: &mut [u8; 16]) -> Result<(), ()>
+    fn encrypt_bytes(&self, plain_bytes: &[u8; 16], version: u8, enc_bytes: &mut [u8]) -> Result<(), ()>
     {
         let mut key: Option<[u8;16]> = None;
         for i in 0..KEYS.len() {
@@ -117,45 +117,12 @@ where
             Err(())
         } else {
             let ctx = Aes128::new(&GenericArray::from(key.unwrap()));
-            ctx.encrypt_block(&mut GenericArray::from(*plain_bytes));
+            let mut block = GenericArray::from(*plain_bytes);
+            ctx.encrypt_block(&mut block);
+            enc_bytes.copy_from_slice(&block); 
             Ok(())
         }
     }
-
-    fn generate_response(&self, req: &[u8], resp: &mut [u8], version: u8) -> Result<(), ()>
-    {
-        let mut data: [u8; 16] = [0u8;16];
-        if self.mix_challenge1(version, req, &mut data).is_err() {
-            return Err(());
-        }
-        if self.encrypt_bytes(&data.clone(), version, &mut data).is_err() {
-            return Err(());
-        }
-        resp[0..8].copy_from_slice(&data[0..8]);
-        Ok(())
-    }
-
-    fn check_response(&self, req: &[u8], resp: &mut [u8], version: u8) -> Result<(), ()>
-    {
-        let mut data: [u8; 16] = [0u8;16];
-        if self.mix_challenge2(version, req, &mut data).is_err() {
-            return Err(());
-        }
-        if self.encrypt_bytes(&data.clone(), version, &mut data).is_err() {
-            return Err(());
-        }
-        if req[0..8] != data[0..8]
-        {
-            return Err(());
-        }
-        // Why do we need to encrypt twice and why is it an error for req != data at this point?
-        if self.encrypt_bytes(&data.clone(), version, &mut data).is_err() {
-            return Err(());
-        }
-        resp[0..8].copy_from_slice(&data[0..8]);
-        Ok(())
-    }
-
 
     fn read_with_timeout
         (
@@ -219,8 +186,8 @@ where
             }
         }
         ufmt::uwrite!(msg, "]").unwrap();
-        self.logger.log(msg.as_str());
-        self.logger.flush();
+        //self.logger.log(msg.as_str());
+        //self.logger.flush();
     }
 
     fn send_packet(&mut self, code: u8, packet: &[u8], length: usize) {
@@ -238,8 +205,8 @@ where
         }
         block!(self.serial.write(!sum)).map_err(|_| ()).unwrap();
         ufmt::uwrite!(msg, "0x{:02x}]", !sum).unwrap();
-        self.logger.log(msg.as_str());
-        self.logger.flush();
+        //self.logger.log(msg.as_str());
+        //self.logger.flush();
     }
 
 
@@ -251,6 +218,7 @@ where
         let mut recv: [u8;256];
         let mut length: u8;
         let mut challenge_version: u8 = 0;
+        let mut challenge1b = [0u8; 16];
 
         self.logger.log("Beginning the sweep!");
         self.logger.flush();
@@ -268,95 +236,119 @@ where
 
            match recv[0].try_into() {
                 Ok(Commands::CmdReadStatus) => {
+                    self.logger.log("CmdReadStatus");
+                    self.logger.flush();
                     let response: [u8;3] = [0x10, 0xC3, 0x06];
                     self.send_packet(ResponseType::Ack as u8, &response, response.len());
                 },
                 Ok(Commands::CmdReadTemperature) => {
+                    self.logger.log("CmdReadTemperature");
+                    self.logger.flush();
                     let response: [u8; 1] = [27];
                     self.send_packet(ResponseType::Ack as u8, &response, response.len());
                 },
                 Ok(Commands::CmdReadVoltage) => {
+                    self.logger.log("CmdReadVoltage");
+                    self.logger.flush();
                     let response: [u8; 2] = [0, 0];
                     self.send_packet(ResponseType::Ack as u8, &response, response.len());
                 },
                 Ok(Commands::CmdReadCurrent) => {
+                    self.logger.log("CmdReadCurrent");
+                    self.logger.flush();
                     let current: u16 = 4200;
                     let response: [u8; 2] = current.to_le_bytes();
                     self.send_packet(ResponseType::Ack as u8, &response, response.len());
                 },
                 Ok(Commands::CmdReadCapacity) => {
+                    self.logger.log("CmdReadCapacity");
+                    self.logger.flush();
                     let capacity: u16 = 1800;
                     let response: [u8; 2] = capacity.to_le_bytes();
                     self.send_packet(ResponseType::Ack as u8, &response, response.len());
                 },
                 Ok(Commands::CmdRead8) => {
+                    self.logger.log("CmdRead8");
+                    self.logger.flush();
                     let read8: u16 = 1250; 
                     let response: [u8; 2] = read8.to_le_bytes();
                     self.send_packet(ResponseType::Ack as u8, &response, response.len());
                 },
                 Ok(Commands::CmdReadTimeLeft) => {
+                    self.logger.log("CmdReadTimeLeft");
+                    self.logger.flush();
                     let time_left: u16 = 1025; 
                     let response: [u8; 2] = time_left.to_le_bytes();
                     self.send_packet(ResponseType::Ack as u8, &response, response.len());
 
                 },
                 Ok(Commands::CmdRead11) => {
+                    self.logger.log("CmdRead11");
+                    self.logger.flush();
                     let read11: u16 = 15;
                     let response: [u8; 2] = read11.to_le_bytes();
                     self.send_packet(ResponseType::Ack as u8, &response, response.len());
                 },
                 Ok(Commands::CmdReadSerialno) => {
+                    self.logger.log("CmdReadSerialno");
+                    self.logger.flush();
                     let sn = [SERIALNO[1], SERIALNO[0], SERIALNO[3], SERIALNO[2]];
                     self.send_packet(ResponseType::Ack as u8, &sn, sn.len());
                 },
                 Ok(Commands::CmdRead13) => {
+                    self.logger.log("CmdRead13");
+                    self.logger.flush();
                     let response: [u8; 5] = [0x9D, 0x10, 0x10, 0x28, 0x14];
                     self.send_packet(ResponseType::Ack as u8, &response, response.len());
                 },
                 Ok(Commands::CmdRead22) => {
+                    self.logger.log("CmdRead22");
+                    self.logger.flush();
                     let response = b"SonyEnergyDevices";
                     self.send_packet(ResponseType::Ack as u8, response, response.len());
                 },
                 Ok(Commands::CmdAuth1) => {
+                    self.logger.log("CmdAuth1");
+                    self.logger.flush();
                     challenge_version = recv[1];
-                    let mut challenge_response = [0u8; 8];
-                    //let mut challenge_request = [0u8; 16];
-                    //challenge_request[0] = recv[2];
-                    if self.generate_response(&recv[2..], &mut challenge_response, challenge_version).is_ok()
-                    {
-                        let mut packet = [0u8;16];
-                        packet[0..8].copy_from_slice(&challenge_response[0..8]);
-                        packet[8..16].copy_from_slice(&BATTERY_NONCE);
-                        self.send_packet(ResponseType::Ack as u8, &packet, packet.len());
-                        self.logger.log("CmdAuth1 Sending ACK!");
-                        self.logger.flush();
-                    } else {
-                        self.send_packet(ResponseType::Nak as u8, &[0], 0);   
-                        self.logger.log("CmdAuth1 Sending NAK!");
-                        self.logger.flush();
-                    }
+                    let mut challenge1a = [0u8; 16];
+                    let mut data = [0u8; 16];
+                    let _ = self.mix_challenge1(challenge_version, &recv[2..], &mut data);
+                    let _ = self.encrypt_bytes(&data, challenge_version, &mut challenge1a);
+                    let second = challenge1a.clone();
+                    let _ = self.encrypt_bytes(&second, challenge_version, &mut challenge1b);
+                    let mut packet = [0u8; 16];
+                    packet[0..8].copy_from_slice(&challenge1a[0..8]);
+                    packet[8..16].copy_from_slice(&challenge1b[0..8]);
+                    self.send_packet(ResponseType::Ack as u8, &packet, packet.len());
                 },
                 Ok(Commands::CmdAuth2) => {
-                    let mut challenge_response = [0u8; 16];
-                    if self.check_response(&recv[1..], &mut challenge_response, challenge_version).is_ok()
-                    {
-                        self.send_packet(ResponseType::Ack as u8, &challenge_response, challenge_response.len());
-                        self.logger.log("CmdAuth2 Sending ACK!");
-                        self.logger.flush();
-
-                    } else {
-                        self.send_packet(ResponseType::Nak as u8, &[0], 0);   
-                        self.logger.log("CmdAuth2 Sending NAK!");
-                        self.logger.flush();
+                    self.logger.log("CmdAuth2");
+                    self.logger.flush();
+                    let mut data2 = [0u8; 16];
+                    let mut challenge2 = [0u8; 16];
+                    let mut packet = [0u8; 16];
+                    let _ = self.mix_challenge2(challenge_version, &challenge1b, &mut data2);
+                    let _ = self.encrypt_bytes(&data2, challenge_version, &mut challenge2);
+                    let _ = self.encrypt_bytes(&challenge2, challenge_version, &mut packet);
+                    self.send_packet(ResponseType::Ack as u8, &packet[0..8], 8);
+                    if challenge_version == 0xeb || challenge_version == 0xb3 {
+                        let special_packet = [0x5a, 0x02, 0x01, 0xa2];
+                        for byte in special_packet {
+                            block!(self.serial.write(byte));
+                        }
                     }
                 },
                 _ => {
+                    let mut msg = heapless::String::<256>::new();
+                    ufmt::uwrite!(msg, "Unknown packet: 0x{:02x}", recv[0]).unwrap();
+                    self.logger.log(&msg); 
+                    self.logger.flush();
                     self.send_packet(ResponseType::Nak as u8, &[0], 0);   
-                        self.logger.log("Sending General NAK!");
-                        self.logger.flush();
+                    self.logger.log("Sending General NAK!");
+                    self.logger.flush();
 
                 }
-
            }
 
            self.led_pin.set_high().map_err(|_|()).unwrap();
