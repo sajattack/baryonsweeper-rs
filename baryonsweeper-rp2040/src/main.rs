@@ -4,7 +4,7 @@
 #![no_std]
 #![no_main]
 
-use bsp::{entry, hal};
+use bsp::{entry, hal::{self, gpio::bank0::{Gpio0, Gpio1}, uart::Parity}};
 use defmt::*;
 use defmt_rtt as _;
 
@@ -79,17 +79,21 @@ fn main() -> ! {
 
     let led_pin = pins.led.into_push_pull_output();
 
+    type UartPins = (
+        hal::gpio::Pin<Gpio0, hal::gpio::FunctionUart, hal::gpio::PullNone>,
+        hal::gpio::Pin<Gpio1, hal::gpio::FunctionUart, hal::gpio::PullNone>,
+    );
 
-    let uart_pins = (
+    let uart_pins: UartPins = (
         // UART TX (characters sent from RP2040) on pin 1 (GPIO0)
-        pins.gpio0.into_function(),
+        pins.gpio0.reconfigure(),
         // UART RX (characters received by RP2040) on pin 2 (GPIO1)
-        pins.gpio1.into_function(),
+        pins.gpio1.reconfigure(),
     );
 
     let uart = uart::UartPeripheral::new(pac.UART0, uart_pins, &mut pac.RESETS)
         .enable(
-            UartConfig::new(19200.Hz(), DataBits::Eight, None, StopBits::One),
+            UartConfig::new(19200.Hz(), DataBits::Eight, Some(Parity::Even), StopBits::One),
             clocks.peripheral_clock.freq(),
         )
         .unwrap();
