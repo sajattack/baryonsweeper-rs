@@ -209,6 +209,14 @@ where
         //self.logger.flush();
     }
 
+    pub fn matrix_swap(&self, key: &[u8;16]) -> [u8; 16] {
+        let newmap = [0x00, 0x04, 0x08, 0x0C, 0x01, 0x05, 0x09, 0x0D, 0x02, 0x06, 0x0A, 0x0E, 0x03, 0x07, 0x0B, 0x0F];
+        let mut temp = [0u8; 16];
+        for i in 0..key.len() {
+            temp[i] = key[newmap[i]];
+        }
+        return temp;
+    }
 
     pub fn sweep(&mut self) 
     where
@@ -314,9 +322,11 @@ where
                     let mut challenge1a = [0u8; 16];
                     let mut data = [0u8; 16];
                     let _ = self.mix_challenge1(challenge_version, &recv[2..], &mut data);
+                    let data = self.matrix_swap(&data);
                     let _ = self.encrypt_bytes(&data, challenge_version, &mut challenge1a);
                     let second = challenge1a.clone();
                     let _ = self.encrypt_bytes(&second, challenge_version, &mut challenge1b);
+                    challenge1b = self.matrix_swap(&challenge1b);
                     let mut packet = [0u8; 16];
                     packet[0..8].copy_from_slice(&challenge1a[0..8]);
                     packet[8..16].copy_from_slice(&challenge1b[0..8]);
@@ -329,13 +339,14 @@ where
                     let mut challenge2 = [0u8; 16];
                     let mut packet = [0u8; 16];
                     let _ = self.mix_challenge2(challenge_version, &challenge1b[0..8], &mut data2);
+                    data2 = self.matrix_swap(&data2);
                     let _ = self.encrypt_bytes(&data2, challenge_version, &mut challenge2);
                     let _ = self.encrypt_bytes(&challenge2, challenge_version, &mut packet);
                     self.send_packet(ResponseType::Ack as u8, &packet[0..8], 8);
                     if challenge_version == 0xeb || challenge_version == 0xb3 {
                         let special_packet = [0x5a, 0x02, 0x01, 0xa2];
                         for byte in special_packet {
-                            block!(self.serial.write(byte));
+                            let _ = block!(self.serial.write(byte));
                         }
                     }
                 },
