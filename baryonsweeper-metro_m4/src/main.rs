@@ -25,6 +25,8 @@ use pac::NVIC;
 use usb_device::prelude::*;
 use usbd_serial::{SerialPort, USB_CLASS_CDC};
 
+use spin::RwLock;
+
 #[entry]
 fn main() -> ! {
     rtt_init_print!();
@@ -68,7 +70,7 @@ fn main() -> ! {
     };
 
     unsafe {
-        USB_SERIAL = Some(SerialPort::new(bus_allocator));
+        USB_SERIAL = Some(RwLock::new(SerialPort::new(bus_allocator)));
         USB_BUS = Some(
             UsbDeviceBuilder::new(bus_allocator, UsbVidPid(0x2222, 0x3333))
                 .manufacturer("Fake company")
@@ -91,11 +93,10 @@ fn main() -> ! {
     }
     let led_pin: bsp::RedLed = pins.d13.into();
 
-    if let Some(usb_serial) = unsafe { USB_SERIAL.as_mut() } {
-        let logger = embedded_logger::CombinedLogger::<UsbBus,256>::new(usb_serial);
-        let mut baryon_sweeper = BaryonSweeper::new(uart, timer, led_pin, 500.millis(), logger);
-        baryon_sweeper.sweep();
-    }
+    let usb_serial = unsafe { USB_SERIAL.as_mut().unwrap() };
+    let logger = embedded_logger::CombinedLogger::<UsbBus,256>::new(usb_serial);
+    let mut baryon_sweeper = BaryonSweeper::new(uart, timer, led_pin, 500.millis(), logger);
+    baryon_sweeper.sweep();
     core::unreachable!()
 
 
@@ -103,17 +104,18 @@ fn main() -> ! {
 
 static mut USB_ALLOCATOR: Option<UsbBusAllocator<UsbBus>> = None;
 static mut USB_BUS: Option<UsbDevice<UsbBus>> = None;
-static mut USB_SERIAL: Option<SerialPort<UsbBus>> = None;
+static mut USB_SERIAL: Option<RwLock<SerialPort<UsbBus>>> = None;
 
 fn poll_usb() {
     unsafe {
         if let Some(usb_dev) = USB_BUS.as_mut() {
             if let Some(usb_serial) = USB_SERIAL.as_mut() {
-                usb_dev.poll(&mut [usb_serial]);
+                let mut usb_lock = usb_serial.write();
+                usb_dev.poll(&mut [&mut *usb_lock]);
 
                 // Make the other side happy
                 let mut buf = [0u8; 16];
-                let _ = usb_serial.read(&mut buf);
+                let _ = usb_serial.write().read(&mut buf);
             };
         }
     };
