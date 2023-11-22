@@ -5,7 +5,7 @@ use nb::block;
 use num_enum::TryFromPrimitive;
 use aes::Aes128;
 use aes::cipher::{
-    BlockEncrypt, KeyInit,
+    BlockEncryptMut, KeyInit,
     generic_array::GenericArray,
 };
 use embedded_logger::Logger;
@@ -107,7 +107,7 @@ where
         }
     }
 
-    fn encrypt_bytes(&self, plain_bytes: &[u8; 16], version: u8, enc_bytes: &mut [u8]) -> Result<(), ()>
+    fn encrypt_bytes(&self, plain_bytes: &[u8; 16], version: u8, encrypted: &mut [u8]) -> Result<(), ()>
     {
         let mut key: Option<[u8;16]> = None;
         for i in 0..KEYS.len() {
@@ -118,10 +118,10 @@ where
         if key.is_none() {
             Err(())
         } else {
-            let ctx = Aes128::new(&GenericArray::from(key.unwrap()));
-            let mut block = GenericArray::from(*plain_bytes);
-            ctx.encrypt_block(&mut block);
-            enc_bytes.copy_from_slice(&block); 
+            let mut ctx = ecb::Encryptor::<Aes128>::new(&GenericArray::from(key.unwrap()));
+            let block = GenericArray::from(*plain_bytes);
+            let mut encrypted_gen = GenericArray::from_mut_slice(encrypted);
+            ctx.encrypt_block_b2b_mut(&block, &mut encrypted_gen);
             Ok(())
         }
     }
@@ -132,11 +132,13 @@ where
         if self.mix_challenge1(version, req, &mut data).is_err() {
             return Err(());
         }
-        if self.encrypt_bytes(&data.clone(), version, &mut data).is_err() {
-            return Err(());
+        let mut enc = [0u8; 16];
+        if self.encrypt_bytes(&data.clone(), version, &mut enc).is_ok() {
+            resp[0..8].copy_from_slice(&enc[0..8]);
+            return Ok(())
+        } else {
+            return Err(())
         }
-        resp[0..8].copy_from_slice(&data[0..8]);
-        Ok(())
     }
 
     fn check_response(&self, req: &[u8], resp: &mut [u8], version: u8) -> Result<(), ()>
@@ -145,19 +147,23 @@ where
         if self.mix_challenge2(version, &BATTERY_NONCE, &mut data).is_err() {
             return Err(());
         }
-        if self.encrypt_bytes(&data.clone(), version, &mut data).is_err() {
-            return Err(());
+        let mut enc = [0u8; 16];
+        if self.encrypt_bytes(&data.clone(), version, &mut enc).is_ok() {
+            if self.encrypt_bytes(&data.clone(), version, &mut enc).is_ok() {
+                resp[0..8].copy_from_slice(&enc[0..8]);
+
+                if req[0..8] != data[0..8]
+                {
+                    return Err(());
+                }
+                Ok(())
+            }
+            else {
+                Err(())
+            }
+        } else {
+            Err(())
         }
-        if req[0..8] != data[0..8]
-        {
-            return Err(());
-        }
-        // Why do we need to encrypt twice and why is it an error for req != data at this point?
-        if self.encrypt_bytes(&data.clone(), version, &mut data).is_err() {
-            return Err(());
-        }
-        resp[0..8].copy_from_slice(&data[0..8]);
-        Ok(())
     }
 
     fn read_with_timeout

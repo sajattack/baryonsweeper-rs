@@ -20,6 +20,7 @@ ufmt = "0.2.0"
 itsybitsy_m0 = { version = "0.13", optional=true }
 #log = "0.4.20"
 embedded-logger = { path = "../embedded-logger" }
+ecb = "0.1.2"
 
 
 [features]
