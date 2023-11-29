@@ -4,7 +4,6 @@
 #![no_std]
 #![no_main]
 
-use core::cell::RefCell;
 use bsp::{entry, hal::{self, gpio::bank0::{Gpio0, Gpio1}, uart::Parity}};
 use defmt::*;
 use defmt_rtt as _;
@@ -28,11 +27,6 @@ use bsp::hal::{
     usb::UsbBus,
 };
 
-
-use core::ops::DerefMut;
-use core::ops::Deref;
-use core::borrow::BorrowMut;
-
 // USB Device support
 use usb_device::{class_prelude::*, prelude::*};
 
@@ -48,7 +42,7 @@ static mut USB_DEVICE: Option<UsbDevice<hal::usb::UsbBus>> = None;
 static mut USB_BUS: Option<UsbBusAllocator<hal::usb::UsbBus>> = None;
 
 /// The USB Serial Device Driver (shared with the interrupt).
-static mut USB_SERIAL: Option<RefCell<SerialPort<hal::usb::UsbBus>>> = None;
+static mut USB_SERIAL: Option<SerialPort<UsbBus>> = None;
 
 
 #[entry]
@@ -122,8 +116,7 @@ fn main() -> ! {
 
     // Set up the USB Communications Class Device driver
     unsafe { 
-        USB_SERIAL = Some(RefCell::new(SerialPort::new(usb_bus).into()));
-        //USB_SERIAL.unwrap().write(b"Hello!\r\n").unwrap(); 
+        USB_SERIAL = Some(SerialPort::new(usb_bus).into());
     }
 
     // Create a USB device with a fake VID and PID
@@ -135,7 +128,8 @@ fn main() -> ! {
         .build())
     };
 
-    let logger = embedded_logger::CombinedLogger::<UsbBus,256>::new( unsafe {USB_SERIAL.as_ref().unwrap()});
+    let usb_serial = unsafe { USB_SERIAL.as_mut().unwrap() };
+    let logger = embedded_logger::CombinedLogger::<UsbBus,256>::new(usb_serial);
     let mut baryon_sweeper = BaryonSweeper::new(uart, timer.count_down(), led_pin, 500.millis(), logger);
 
     baryon_sweeper.sweep();
@@ -145,20 +139,16 @@ fn main() -> ! {
 #[allow(non_snake_case)]
 #[interrupt]
 unsafe fn USBCTRL_IRQ() {
-    let usb_dev = unsafe { USB_DEVICE.as_mut().unwrap() };
-    if usb_dev.poll(unsafe {&mut [ USB_SERIAL.as_mut().unwrap().borrow_mut().deref_mut().get_mut()]} ) {
-        let mut buf = [0u8; 64];
-        match unsafe { USB_SERIAL.as_mut().unwrap().borrow_mut().deref()}.borrow_mut().deref_mut().read(&mut buf) {
-            Err(_e) => {
-                // Do nothing
-            }
-            Ok(0) => {
-                // Do nothing
-            }
-            Ok(_count) => {
-                // Do nothing
+    unsafe {
+        if let Some(ref mut usb_dev) = &mut USB_DEVICE {
+            if let Some(ref mut usb_serial) = &mut USB_SERIAL {
+                usb_dev.poll(&mut [usb_serial]);
+
+                // Make the other side happy
+                let mut buf = [0u8; 16];
+                let _ = usb_serial.read(&mut buf);
             }
         }
-    }
+    };
 }
 

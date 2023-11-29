@@ -15,9 +15,9 @@
 
 use log::{Level, Metadata, Record};
 
-use core::borrow::BorrowMut;
 use ufmt::uwrite;
-use spin::RwLock;
+use critical_section::Mutex;
+use core::cell::RefCell;
 
 #[cfg(feature = "rtt")]
 pub use rtt_target::rprint;
@@ -27,19 +27,19 @@ cfg_if::cfg_if! {
         pub struct UsbLogger<'a, U, const N: usize>
         where U: usb_device::bus::UsbBus
         {
-            usb_serial: RwLock<usbd_serial::SerialPort<'a, U>>,
-            log_buffer: RwLock<heapless::String<N>>,
+            usb_serial: Mutex<RefCell<&'a mut usbd_serial::SerialPort<'a, U>>>,
+            log_buffer: Mutex<RefCell<heapless::String<N>>>,
         }
 
         impl<'a, U, const N: usize> UsbLogger<'a, U, N>
         where U: usb_device::bus::UsbBus
         {
             pub fn new(
-                usb_serial: usbd_serial::SerialPort<'a, U>,
+                usb_serial: &'a mut usbd_serial::SerialPort<'a, U>,
             ) -> Self {
                 Self {
-                     usb_serial: RwLock::new(usb_serial),
-                     log_buffer: RwLock::new(heapless::String::<N>::new()),
+                     usb_serial: Mutex::new(RefCell::new(usb_serial)),
+                     log_buffer: Mutex::new(RefCell::new(heapless::String::<N>::new())),
                 }
             }
         }
@@ -53,16 +53,19 @@ cfg_if::cfg_if! {
 
             fn log(&self, record: &Record) {
                 if self.enabled(record.metadata()) {
-                    let mut log_lock = self.log_buffer.write();
-                    let mut usb_lock = self.usb_serial.write();
-                    let _ = uwrite!(log_lock, "{} - {}\r\n", record.level().as_str(), record.args().as_str().unwrap());
-                    let _ = usb_lock.borrow_mut().write(log_lock.as_bytes());
+                    critical_section::with(|cs| {
+                        let mut log = self.log_buffer.borrow_ref_mut(cs);
+                        let mut usb = self.usb_serial.borrow_ref_mut(cs);
+                        let _ = uwrite!(log, "{} - {}\r\n", record.level().as_str(), record.args().as_str().unwrap());
+                        let _ = usb.write(log.as_bytes());
+                    });
                 }
             }
 
             fn flush(&self) {
-                let mut usb_lock = self.usb_serial.write();
-                let _ = usb_lock.flush();
+                critical_section::with(|cs| {
+                    let _ = self.usb_serial.borrow_ref_mut(cs).flush();
+                });
             }
         }
     }
@@ -72,14 +75,14 @@ cfg_if::cfg_if! {
     if #[cfg(feature="rtt")] {
         pub struct RttLogger<const N: usize>
         {
-            log_buffer: RwLock::<heapless::String<N>>,
+            log_buffer: Mutex::<RefCell<heapless::String<N>>>,
         }
 
         impl<const N: usize> RttLogger<N>
         {
             pub fn new() -> Self {
                 Self {
-                     log_buffer: RwLock::new(heapless::String::<N>::new()),
+                     log_buffer: Mutex::new(RefCell::new(heapless::String::<N>::new())),
                 }
             }
         }
@@ -92,9 +95,9 @@ cfg_if::cfg_if! {
 
             fn log(&self, record: &Record) {
                 if self.enabled(record.metadata()) {
-                    let mut log_lock = self.log_buffer.write();
-                    let _ = uwrite!(log_lock, "{} - {}\r\n", record.level().as_str(), record.args().as_str().unwrap());
-                    let _ = rprint!("{}", log_lock.as_str());
+                    critical_section::with(|cs| {
+                        rprint!("{}", self.log_buffer.borrow_ref_mut(cs).as_str());
+                    });
                 }
             }
 
@@ -109,19 +112,19 @@ cfg_if::cfg_if! {
         pub struct CombinedLogger<'a, U, const N: usize>
         where U: usb_device::bus::UsbBus
         {
-            usb_serial: &'a RwLock<usbd_serial::SerialPort<'a, U>>,
-            log_buffer: RwLock<heapless::String<N>>,
+            usb_serial: Mutex<RefCell<&'a mut usbd_serial::SerialPort<'a, U>>>,
+            log_buffer: Mutex<RefCell<heapless::String<N>>>,
         }
 
         impl<'a, U, const N: usize> CombinedLogger<'a, U, N>
         where U: usb_device::bus::UsbBus
         {
             pub fn new(
-                usb_serial: &'a RwLock<usbd_serial::SerialPort<'a, U>>,
+                usb_serial: &'a mut usbd_serial::SerialPort<'a, U>,
             ) -> Self {
                 Self {
-                     usb_serial,
-                     log_buffer: RwLock::new(heapless::String::<N>::new()),
+                     usb_serial: Mutex::new(RefCell::new(usb_serial)),
+                     log_buffer: Mutex::new(RefCell::new(heapless::String::<N>::new())),
                 }
             }
         }
@@ -135,17 +138,20 @@ cfg_if::cfg_if! {
 
             fn log(&self, record: &Record) {
                 if self.enabled(record.metadata()) {
-                    let mut log_lock = self.log_buffer.write();
-                    let mut usb_lock = self.usb_serial.write();
-                    let _ = uwrite!(log_lock, "{} - {}\r\n", record.level().as_str(), record.args().as_str().unwrap());
-                    let _ = rprint!("{}", log_lock.as_str());
-                    let _ = usb_lock.borrow_mut().write(log_lock.as_bytes());
+                    critical_section::with(|cs| {
+                        let mut log = self.log_buffer.borrow_ref_mut(cs);
+                        let mut usb = self.usb_serial.borrow_ref_mut(cs);
+                        let _ = uwrite!(log, "{} - {}\r\n", record.level().as_str(), record.args().as_str().unwrap());
+                        let _ = usb.write(log.as_bytes());
+                        rprint!("{}", log);
+                    });
                 }
             }
 
             fn flush(&self) {
-                let mut usb_lock = self.usb_serial.write();
-                let _ = usb_lock.flush();
+                critical_section::with(|cs| {
+                    let _ = self.usb_serial.borrow_ref_mut(cs).flush();
+                });
             }
         }
     }

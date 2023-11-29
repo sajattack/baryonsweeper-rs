@@ -18,6 +18,8 @@ panic-rtt-target = { version = "0.1.2", features=["cortex-m"] }
 rtt-target = { version = "0.3.1", features=["cortex-m"] }
 usb-device = "0.2.0"
 usbd-serial = "0.1.0"
+cortex-m = { version = "0.7.6", features = ["critical-section-single-core"]}
+critical-section = "1.1.2"
 
 [profile.dev]
 debug = true

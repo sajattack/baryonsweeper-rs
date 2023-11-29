@@ -90,12 +90,13 @@ fn main() -> ! {
 
     let led_pin: bsp::RedLed = pins.d13.into();
 
-    if let Some(usb_serial) = unsafe { USB_SERIAL.as_mut() } {
-        let timeout: hal::time::Nanoseconds = 500.ms().into();
-        let logger = embedded_logger::CombinedLogger::<UsbBus, 512>::new(usb_serial);
-        let mut baryon_sweeper = BaryonSweeper::new(uart, timer, led_pin, timeout, logger);
-        baryon_sweeper.sweep();
-    }
+
+    let usb_serial = unsafe { USB_SERIAL.as_mut().unwrap() };
+    let logger = embedded_logger::CombinedLogger::<UsbBus,256>::new(usb_serial);
+
+    let timeout: hal::time::Nanoseconds = 500.ms().into();
+    let mut baryon_sweeper = BaryonSweeper::new(uart, timer, led_pin, timeout, logger);
+    baryon_sweeper.sweep();
     core::unreachable!()
 
 
@@ -108,13 +109,13 @@ static mut USB_SERIAL: Option<SerialPort<UsbBus>> = None;
 fn poll_usb() {
     unsafe {
         if let Some(usb_dev) = USB_BUS.as_mut() {
-            if let Some(usb_serial) = USB_SERIAL.as_mut() {
+            if let Some(ref mut usb_serial) = &mut USB_SERIAL {
                 usb_dev.poll(&mut [usb_serial]);
 
                 // Make the other side happy
                 let mut buf = [0u8; 16];
                 let _ = usb_serial.read(&mut buf);
-            };
+            }
         }
     };
 }

@@ -164,6 +164,8 @@ name = "baryonsweeper-itsybitsy_m0"
 version = "0.1.0"
 dependencies = [
  "baryonsweeper",
+ "cortex-m",
+ "critical-section",
  "embedded-logger",
  "fugit",
  "itsybitsy_m0",
@@ -178,6 +180,8 @@ name = "baryonsweeper-metro_m4"
 version = "0.1.0"
 dependencies = [
  "baryonsweeper",
+ "cortex-m",
+ "critical-section",
  "embedded-logger",
  "metro_m4",
  "panic-rtt-target",
@@ -308,6 +312,7 @@ checksum = "8ec610d8f49840a5b376c69663b6369e71f4b34484b9b2eb29fb918d92516cb9"
 dependencies = [
  "bare-metal",
  "bitfield",
+ "critical-section",
  "embedded-hal",
  "volatile-register",
 ]
@@ -453,13 +458,12 @@ name = "embedded-logger"
 version = "0.1.0"
 dependencies = [
  "cfg-if",
+ "critical-section",
  "embedded-hal",
  "heapless",
  "log",
- "once_cell",
  "rtt-logger",
  "rtt-target",
- "spin",
  "ufmt",
  "usb-device",
  "usbd-serial",
@@ -783,12 +787,6 @@ dependencies = [
  "quote",
  "syn 2.0.39",
 ]
-
-[[package]]
-name = "once_cell"
-version = "1.18.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "dd8b5dd2ae5ed71462c540258bedcb51965123ad7e7ccf4b9a8cafaa4a63576d"
 
 [[package]]
 name = "opaque-debug"
