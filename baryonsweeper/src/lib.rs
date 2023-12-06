@@ -234,31 +234,21 @@ where
                 Ok(Commands::CmdAuth1) => {
                     info!("CmdAuth1");
                     challenge_version = recv[1];
-                    let mut challenge1a = [0u8; 16];
-                    let mut data = [0u8; 16];
-                    mix_challenge1(challenge_version, &recv[2..], &mut data).unwrap();
-                    encrypt_bytes(&data, challenge_version, &mut challenge1a).unwrap();
-                    let second = challenge1a.clone();
-                    let mut temp = [0u8; 16];
-                    encrypt_bytes(&second, challenge_version, &mut temp).unwrap();
-                    matrix_swap(&temp, &mut challenge1b);
-                    let mut packet = [0u8; 16];
-                    packet[0..8].copy_from_slice(&challenge1a[0..8]);
-                    packet[8..16].copy_from_slice(&challenge1b[0..8]);
-                    self.send_packet(ResponseType::Ack as u8, &packet);
+                    let challenge = &recv[2..];
+                    if let Ok((packet, bchal)) = cmdauth1(challenge_version, &challenge)
+                    {
+                        challenge1b = bchal;
+                        self.send_packet(ResponseType::Ack as u8, &packet);
+                    }
                 },
                 Ok(Commands::CmdAuth2) => {
                     info!("CmdAuth2");
-                    let mut data2 = [0u8; 16];
-                    let mut challenge2 = [0u8; 16];
-                    let mut temp = [0u8; 16];
-                    let mut packet = [0u8; 16];
-                    mix_challenge2(challenge_version, &challenge1b[0..8], &mut temp).unwrap();
-                    matrix_swap(&temp, &mut data2);
-                    encrypt_bytes(&data2, challenge_version, &mut challenge2).unwrap();
-                    encrypt_bytes(&challenge2, challenge_version, &mut packet).unwrap();
-                    self.send_packet(ResponseType::Ack as u8, &packet);
-
+                    challenge_version = recv[1];
+                    let challenge = &recv[2..];
+                    if let Ok(packet) = cmdauth2(challenge_version, &challenge, &challenge1b)
+                    {
+                        self.send_packet(ResponseType::Ack as u8, &packet);
+                    }
                 },
                 _ => {
                     self.send_packet(ResponseType::Nak as u8, &[]);   
@@ -273,6 +263,34 @@ where
 
 }
 
+fn cmdauth1(version: u8, challenge: &[u8]) -> Result<([u8; 16], [u8; 16]), ()> {
+    let mut challenge1a = [0u8; 16];
+    let mut challenge1b = [0u8; 16];
+    let mut data = [0u8; 16];
+    mix_challenge1(version, challenge, &mut data).unwrap();
+    encrypt_bytes(&data, version, &mut challenge1a).unwrap();
+    let second = challenge1a.clone();
+    let mut temp = [0u8; 16];
+    encrypt_bytes(&second, version, &mut temp).unwrap();
+    matrix_swap(&temp, &mut challenge1b);
+    let mut packet = [0u8; 16];
+    packet[0..8].copy_from_slice(&challenge1a[0..8]);
+    packet[8..16].copy_from_slice(&challenge1b[0..8]);
+    Ok((packet, challenge1b))
+}
+
+fn cmdauth2(challenge_version: u8, challenge: &[u8], ch1b: &[u8]) -> Result<[u8; 16], ()>
+{
+    let mut data2 = [0u8; 16];
+    let mut challenge2 = [0u8; 16];
+    let mut temp = [0u8; 16];
+    let mut packet = [0u8; 16];
+    mix_challenge2(challenge_version, &ch1b[0..8], &mut temp).unwrap();
+    matrix_swap(&temp, &mut data2);
+    encrypt_bytes(&data2, challenge_version, &mut challenge2).unwrap();
+    encrypt_bytes(&challenge2, challenge_version, &mut packet).unwrap();
+    Ok(packet)
+}
 
 fn mix_challenge1(version: u8, challenge: &[u8], data: &mut [u8]) -> Result<(), ()>
 {
@@ -402,31 +420,22 @@ mod tests {
         let code: u8 = ResponseType::Ack as u8;
 
         let challenge_version = challenge[3];
-        let mut challenge1a = [0u8; 16];
-        let mut challenge1b = [0u8; 16];
-        let mut data = [0u8; 16];
-        let mut temp = [0u8; 16];
-        let _ = mix_challenge1(challenge_version, &challenge[4..], &mut data);
-        let _ = encrypt_bytes(&data, challenge_version, &mut challenge1a);
-        let second = challenge1a.clone();
-        let _ = encrypt_bytes(&second, challenge_version, &mut temp);
-        matrix_swap(&temp, &mut challenge1b);
-        let mut packet = [0u8; 16];
-        packet[0..8].copy_from_slice(&challenge1a[0..8]);
-        packet[8..16].copy_from_slice(&challenge1b[0..8]);
-        let temp = [
-            0xA5, 16 + 2, code, packet[0], packet[1], packet[2], packet[3], packet[4], packet[5], packet[6], packet[7],
-            packet[8], packet[9], packet[10], packet[11], packet[12], packet[13], packet[14], packet[15]];
-        assert_eq!(checksum(&temp), expected_response[19]);
-        let mut send = [0u8; 20];
-        send[0..19].copy_from_slice(&temp);
-        send[19] = checksum(&temp);
-        assert_eq!(expected_response, send);
+        let ch = &challenge[4..];
+        if let Ok((packet, ch1b)) = cmdauth1(challenge_version, &ch) {
+            let temp = [
+                0xA5, 16 + 2, code, packet[0], packet[1], packet[2], packet[3], packet[4], packet[5], packet[6], packet[7],
+                packet[8], packet[9], packet[10], packet[11], packet[12], packet[13], packet[14], packet[15]];
+            assert_eq!(checksum(&temp), expected_response[19]);
+            let mut send = [0u8; 20];
+            send[0..19].copy_from_slice(&temp);
+            send[19] = checksum(&temp);
+            assert_eq!(expected_response, send);
+        }
     }
 
     #[test]
     fn test_challenge_response_cmdauth2() {
-        let _challenge: [u8; 12] = [0x5A, 0x0A, 0x81, 0x13, 0xF1, 0x06, 0x0B, 0x97, 0x9E, 0x9F, 0xF9, 0x38];
+        let challenge: [u8; 12] = [0x5A, 0x0A, 0x81, 0x13, 0xF1, 0x06, 0x0B, 0x97, 0x9E, 0x9F, 0xF9, 0x38];
         let expected_response: [u8;20] = [
             0xA5, 0x12, 0x06, 0xBA, 0x54, 0x76, 0x57, 0x8E, 0xAF, 0x4E,
             0x8F, 0xAD,  0xF2, 0xA3, 0x55, 0xDA, 0x10, 0xC2, 0x1D, 0xED
@@ -436,29 +445,20 @@ mod tests {
         let code: u8 = ResponseType::Ack as u8;
         let challenge_version = 0xD9;
 
-        let mut data2 = [0u8; 16];
-        let mut temp = [0u8; 16];
-        let mut challenge2 = [0u8; 16];
-        let mut packet = [0u8; 16];
         let challenge1b: [u8; 8] = [0x1A, 0xC9, 0x21, 0x7A, 0xE9, 0x8F, 0xBE, 0x22];
-        mix_challenge2(challenge_version, &challenge1b[0..8], &mut temp).unwrap();
-        matrix_swap(&temp, &mut data2);
-        encrypt_bytes(&data2, challenge_version, &mut challenge2).unwrap();
-        encrypt_bytes(&challenge2, challenge_version, &mut packet).unwrap();
 
+        if let Ok(packet) = cmdauth2(challenge_version, &challenge, &challenge1b) {
+            let temp = [
+                0xA5, 16 + 2, code, 
+                packet[0], packet[1], packet[2], packet[3], packet[4], packet[5], packet[6], packet[7],
+                packet[8], packet[9], packet[10], packet[11], packet[12], packet[13], packet[14], packet[15],
 
-
-        let temp = [
-            0xA5, 16 + 2, code, 
-            packet[0], packet[1], packet[2], packet[3], packet[4], packet[5], packet[6], packet[7],
-            packet[8], packet[9], packet[10], packet[11], packet[12], packet[13], packet[14], packet[15],
-
-        ]; 
-        assert_eq!(checksum(&temp), expected_response[19]);
-        let mut send = [0u8; 20];
-        send[0..19].copy_from_slice(&temp);
-        send[19] = checksum(&temp);
-        assert_eq!(expected_response, send);
-
+            ]; 
+            assert_eq!(checksum(&temp), expected_response[19]);
+            let mut send = [0u8; 20];
+            send[0..19].copy_from_slice(&temp);
+            send[19] = checksum(&temp);
+            assert_eq!(expected_response, send);
+        }
     }
 }
