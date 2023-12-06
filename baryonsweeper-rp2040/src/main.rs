@@ -5,10 +5,12 @@
 #![no_main]
 
 use bsp::{entry, hal::{self, gpio::bank0::{Gpio0, Gpio1}, uart::Parity}};
-use defmt::*;
-use defmt_rtt as _;
+//use defmt::*;
+//use defmt_rtt as _;
+use log::info;
 
-use panic_probe as _;
+//use panic_probe as _;
+use panic_halt as _;
 
 // Provide an alias for our BSP so we can switch targets quickly.
 // Uncomment the BSP you included in Cargo.toml, the rest of the code does not need to change.
@@ -30,6 +32,8 @@ use bsp::hal::{
 // USB Device support
 use usb_device::{class_prelude::*, prelude::*};
 
+use embedded_logger::CombinedLogger;
+
 // USB Communications Class Device support
 use usbd_serial::SerialPort;
 
@@ -44,9 +48,11 @@ static mut USB_BUS: Option<UsbBusAllocator<hal::usb::UsbBus>> = None;
 /// The USB Serial Device Driver (shared with the interrupt).
 static mut USB_SERIAL: Option<SerialPort<UsbBus>> = None;
 
+static mut LOGGER: Option<CombinedLogger::<UsbBus,256>> = None;
 
 #[entry]
 fn main() -> ! {
+    rtt_target::rtt_init_print!();
     info!("Program start");
     let mut pac = pac::Peripherals::take().unwrap();
     let _core = pac::CorePeripherals::take().unwrap();
@@ -129,8 +135,11 @@ fn main() -> ! {
     };
 
     let usb_serial = unsafe { USB_SERIAL.as_mut().unwrap() };
-    let logger = embedded_logger::CombinedLogger::<UsbBus,256>::new(usb_serial);
-    let mut baryon_sweeper = BaryonSweeper::new(uart, timer.count_down(), led_pin, 500.millis(), logger);
+    let logger = CombinedLogger::<UsbBus,256>::new(usb_serial);
+
+    unsafe { LOGGER = Some(logger) };
+    unsafe { log::set_logger_racy( LOGGER.as_ref().unwrap() ).unwrap(); }
+    let mut baryon_sweeper = BaryonSweeper::new(uart, timer.count_down(), led_pin, 500.millis());
 
     baryon_sweeper.sweep();
     core::unreachable!()

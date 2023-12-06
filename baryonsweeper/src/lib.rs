@@ -18,7 +18,7 @@ mod consts;
 
 use consts::*;
 
-use log::{Log, info, debug};
+use log::{info, debug};
 
 #[cfg(feature="metro_m4")]
 type TimeoutType = fugit::NanosDurationU32;
@@ -29,36 +29,32 @@ type TimeoutType = fugit::MicrosDurationU64;
 #[cfg(feature="itsybitsy_m0")]
 type TimeoutType = itsybitsy_m0::hal::time::Nanoseconds;
 
-pub struct BaryonSweeper<S, C, P, T, L> 
+pub struct BaryonSweeper<S, C, P, T> 
 where 
     S: Read<u8> + Write<u8>,
     C: CountDown,
     P: OutputPin,
     T: From<TimeoutType> + Clone,
-    L: Log,
 {
     serial: S,
     timer: C,
     led_pin: P,
     timeout: T,
-    logger: L,
 }
     
-impl<S, C, P, T, L> BaryonSweeper<S, C, P, T, L>
+impl<S, C, P, T> BaryonSweeper<S, C, P, T>
 where 
     S: Read<u8> + Write<u8>,
     C: CountDown,
     P: OutputPin,
     T: From<TimeoutType> + Clone,
-    L: Log,
 {
-    pub fn new(serial: S, timer: C, led_pin: P, timeout: T, logger: L) -> BaryonSweeper<S, C, P, T, L> {
+    pub fn new(serial: S, timer: C, led_pin: P, timeout: T) -> BaryonSweeper<S, C, P, T> {
         Self {
             serial,
             timer,
             led_pin,
             timeout,
-            logger,
         }
     }
 
@@ -126,7 +122,7 @@ where
         }
         ufmt::uwrite!(msg, "]").unwrap();
         debug!("{}", msg.as_str());
-        self.logger.flush();
+        
     }
 
     fn send_packet(&mut self, code: u8, packet: &[u8]) {
@@ -146,7 +142,7 @@ where
         }
         ufmt::uwrite!(msg, "]").unwrap();
         debug!("{}", msg.as_str());
-        self.logger.flush();
+        
     }
 
     pub fn sweep(&mut self) 
@@ -160,7 +156,7 @@ where
         let mut challenge1b = [0u8; 16];
 
         info!("Beginning the sweep!");
-        self.logger.flush();
+        
 
         loop {
            //info!("Sweepin!");
@@ -176,46 +172,39 @@ where
            match recv[0].try_into() {
                 Ok(Commands::CmdReadStatus) => {
                     info!("CmdReadStatus");
-                    self.logger.flush();
                     let response: [u8;3] = [0x10, 0xC3, 0x06];
                     self.send_packet(ResponseType::Ack as u8, &response);
                 },
                 Ok(Commands::CmdReadTemperature) => {
                     info!("CmdReadTemperature");
-                    self.logger.flush();
                     let response: [u8; 1] = [27];
                     self.send_packet(ResponseType::Ack as u8, &response);
                 },
                 Ok(Commands::CmdReadVoltage) => {
                     info!("CmdReadVoltage");
-                    self.logger.flush();
                     let response: [u8; 2] = [0, 0];
                     self.send_packet(ResponseType::Ack as u8, &response);
                 },
                 Ok(Commands::CmdReadCurrent) => {
                     info!("CmdReadCurrent");
-                    self.logger.flush();
                     let current: u16 = 4200;
                     let response: [u8; 2] = current.to_le_bytes();
                     self.send_packet(ResponseType::Ack as u8, &response);
                 },
                 Ok(Commands::CmdReadCapacity) => {
                     info!("CmdReadCapacity");
-                    self.logger.flush();
                     let capacity: u16 = 1800;
                     let response: [u8; 2] = capacity.to_le_bytes();
                     self.send_packet(ResponseType::Ack as u8, &response);
                 },
                 Ok(Commands::CmdRead8) => {
                     info!("CmdRead8");
-                    self.logger.flush();
                     let read8: u16 = 1250; 
                     let response: [u8; 2] = read8.to_le_bytes();
                     self.send_packet(ResponseType::Ack as u8, &response);
                 },
                 Ok(Commands::CmdReadTimeLeft) => {
                     info!("CmdReadTimeLeft");
-                    self.logger.flush();
                     let time_left: u16 = 1025; 
                     let response: [u8; 2] = time_left.to_le_bytes();
                     self.send_packet(ResponseType::Ack as u8, &response);
@@ -223,26 +212,22 @@ where
                 },
                 Ok(Commands::CmdRead11) => {
                     info!("CmdRead11");
-                    self.logger.flush();
                     let read11: u16 = 15;
                     let response: [u8; 2] = read11.to_le_bytes();
                     self.send_packet(ResponseType::Ack as u8, &response);
                 },
                 Ok(Commands::CmdReadSerialno) => {
                     info!("CmdReadSerialno");
-                    self.logger.flush();
                     let sn = [SERIALNO[1], SERIALNO[0], SERIALNO[3], SERIALNO[2]];
                     self.send_packet(ResponseType::Ack as u8, &sn);
                 },
                 Ok(Commands::CmdRead13) => {
                     info!("CmdRead13");
-                    self.logger.flush();
                     let response: [u8; 5] = [0x9D, 0x10, 0x10, 0x28, 0x14];
                     self.send_packet(ResponseType::Ack as u8, &response);
                 },
                 Ok(Commands::CmdRead22) => {
                     info!("CmdRead22");
-                    self.logger.flush();
                     let response = b"SonyEnergyDevices";
                     self.send_packet(ResponseType::Ack as u8, response);
                 },
@@ -278,8 +263,6 @@ where
                 _ => {
                     self.send_packet(ResponseType::Nak as u8, &[]);   
                         info!("Sending General NAK!");
-                        self.logger.flush();
-
                 }           
            }
 

@@ -19,8 +19,8 @@ use ufmt::uwrite;
 use critical_section::Mutex;
 use core::cell::RefCell;
 
-#[cfg(feature = "rtt")]
-pub use rtt_target::rprint;
+//#[cfg(feature = "rtt")]
+//pub use rtt_target::rprint;
 
 cfg_if::cfg_if! {
     if #[cfg(feature="usb")] {
@@ -96,7 +96,7 @@ cfg_if::cfg_if! {
             fn log(&self, record: &Record) {
                 if self.enabled(record.metadata()) {
                     critical_section::with(|cs| {
-                        rprint!("{}", self.log_buffer.borrow_ref_mut(cs).as_str());
+                        //rprint!("{}", self.log_buffer.borrow_ref_mut(cs).as_str());
                     });
                 }
             }
@@ -143,7 +143,7 @@ cfg_if::cfg_if! {
                         let mut usb = self.usb_serial.borrow_ref_mut(cs);
                         let _ = uwrite!(log, "{} - {}\r\n", record.level().as_str(), record.args().as_str().unwrap());
                         let _ = usb.write(log.as_bytes());
-                        rprint!("{}", log);
+                        //rprint!("{}", log);
                     });
                 }
             }
