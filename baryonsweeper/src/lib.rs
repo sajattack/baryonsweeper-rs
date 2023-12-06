@@ -9,8 +9,6 @@ use aes::cipher::{
     generic_array::GenericArray,
 };
 
-use core::result::Result::{self, Ok, Err};
-use core::option::Option::{self, Some, None};
 use core::convert::{From, TryInto};
 use core::unreachable;
 
@@ -152,7 +150,7 @@ where
 
         let mut recv: [u8;256];
         let mut length: u8;
-        let mut challenge_version: u8 = 0;
+        let mut challenge_version: u8;
         let mut challenge1b = [0u8; 16];
 
         info!("Beginning the sweep!");
@@ -279,7 +277,7 @@ fn cmdauth1(version: u8, challenge: &[u8]) -> Result<([u8; 16], [u8; 16]), ()> {
     Ok((packet, challenge1b))
 }
 
-fn cmdauth2(challenge_version: u8, challenge: &[u8], ch1b: &[u8]) -> Result<[u8; 16], ()>
+fn cmdauth2(challenge_version: u8, _challenge: &[u8], ch1b: &[u8]) -> Result<[u8; 16], ()>
 {
     let mut data2 = [0u8; 16];
     let mut challenge2 = [0u8; 16];
@@ -421,7 +419,7 @@ mod tests {
 
         let challenge_version = challenge[3];
         let ch = &challenge[4..];
-        if let Ok((packet, ch1b)) = cmdauth1(challenge_version, &ch) {
+        if let Ok((packet, _ch1b)) = cmdauth1(challenge_version, &ch) {
             let temp = [
                 0xA5, 16 + 2, code, packet[0], packet[1], packet[2], packet[3], packet[4], packet[5], packet[6], packet[7],
                 packet[8], packet[9], packet[10], packet[11], packet[12], packet[13], packet[14], packet[15]];
