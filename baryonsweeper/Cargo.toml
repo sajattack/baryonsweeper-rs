@@ -18,7 +18,6 @@ rtt-target = { version = "0.3.1" }
 heapless = { version = "0.8.0", features=["ufmt"] }
 ufmt = "0.2.0"
 itsybitsy_m0 = { version = "0.13", optional=true }
-#log = "0.4.20"
 embedded-logger = { path = "../embedded-logger" }
 ecb = "0.1.2"
 log = "0.4.20"
@@ -28,3 +27,4 @@ log = "0.4.20"
 metro_m4 = []
 rp2040 = []
 itsybitsy_m0 = ["dep:itsybitsy_m0"]
+std = ["embedded-logger/std", "log/std"]

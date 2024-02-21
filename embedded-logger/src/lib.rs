@@ -11,7 +11,7 @@
 //};
 //}
 
-#![no_std]
+#![cfg_attr(not(feature="std"), no_std)]
 
 use log::{Level, Metadata, Record};
 
@@ -159,20 +159,32 @@ cfg_if::cfg_if! {
 
 cfg_if::cfg_if! {
     if #[cfg(feature="std")] {
+        static LOGGER: StdLogger = StdLogger{};
+        use log::{LevelFilter, SetLoggerError};
         pub struct StdLogger {}
         impl StdLogger {
-            pub fn new() -> Self {
+            pub fn init() -> Result<(), SetLoggerError> {
+                log::set_logger(&LOGGER)
+                    .map(|()| log::set_max_level(LevelFilter::Trace))
             }
         }
+
+
 
         impl log::Log for StdLogger
         {
             fn log(&self, record: &Record) {
-                let _ = println!("{} - {}" record.level(), record.metadata());
+                println!("{} - {}", record.level(), record.args());
             }
 
             fn flush(&self) {
             }
+
+            fn enabled(&self, metadata: &Metadata) -> bool {
+                metadata.level() <= Level::Trace
+            }
+
+
         }
     }
 }
