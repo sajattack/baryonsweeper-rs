@@ -105,7 +105,6 @@ where
         let length = block!(self.serial.read()).map_err(|_|()).unwrap();
         *len = length-1;
 
-        let mut msg = heapless::String::<256>::new();
         for i in 0..length {
             let res = self.read_with_timeout(self.timeout.clone());
             if res.is_err() {
@@ -118,18 +117,24 @@ where
         }
        
         
-        let _ = ufmt::uwrite!(msg, "Received packet: 0x5a, 0x{:02X} ", length).unwrap();
-        let _ = msg.write_str(fmt_packet(recv).as_str());
-        debug!("{}", msg.as_str());
+        #[cfg(debug_assertions)]
+        {
+            let mut msg = heapless::String::<256>::new();
+            let _ = ufmt::uwrite!(msg, "Received packet: 0x5a, 0x{:02X} ", length).unwrap();
+            let _ = msg.write_str(fmt_packet(recv).as_str());
+            debug!("{}", msg.as_str());
+        }
     }
 
 
     fn send_packet(&mut self, packet: &[u8]) {
-        let mut msg = heapless::String::<256>::new();
-
-        let _ = ufmt::uwrite!(msg, "Sending packet: ");
-        let _ = msg.write_str(fmt_packet(packet).as_str());
-        debug!("{}\n", msg.as_str());
+        #[cfg(debug_assertions)] 
+        {
+            let mut msg = heapless::String::<256>::new();
+            let _ = ufmt::uwrite!(msg, "Sending packet: ");
+            let _ = msg.write_str(fmt_packet(packet).as_str());
+            debug!("{}\n", msg.as_str());
+        }
 
         for byte in packet {
             block!(self.serial.write(*byte)).map_err(|_| ()).unwrap();

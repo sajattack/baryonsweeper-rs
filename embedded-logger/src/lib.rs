@@ -65,10 +65,7 @@ cfg_if::cfg_if! {
     if #[cfg(feature="std")] {
         static LOGGER: StdLogger = StdLogger{};
 
-        use ufmt::uwrite;
-        use critical_section::Mutex;
-        use core::cell::RefCell;
-        use log::{Level, Record, LevelFilter, SetLoggerError};
+        use log::{Level, Record, LevelFilter, SetLoggerError, Metadata};
 
         pub struct StdLogger {}
         impl StdLogger {
