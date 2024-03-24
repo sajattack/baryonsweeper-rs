@@ -91,9 +91,10 @@ fn main() -> ! {
     }
     let led_pin: bsp::RedLed = pins.d13.into();
 
-    let usb_serial = unsafe { USB_SERIAL.as_mut().unwrap() };
-    let logger = embedded_logger::CombinedLogger::<UsbBus,256>::new(usb_serial);
-    let mut baryon_sweeper = BaryonSweeper::new(uart, timer, led_pin, 500.millis(), logger);
+    //let usb_serial = unsafe { USB_SERIAL.as_mut().unwrap() };
+    // FIXME
+    //let _logger = embedded_logger::CombinedLogger::<UsbBus,256>::new(usb_serial);
+    let mut baryon_sweeper = BaryonSweeper::new(uart, timer, led_pin, 500.millis());
     baryon_sweeper.sweep();
     core::unreachable!()
 

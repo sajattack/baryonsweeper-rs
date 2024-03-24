@@ -18,5 +18,5 @@ critical-section = "1.1.2"
 
 [features]
 usb = ["usbd-serial", "usb-device"]
-rtt = []
+rtt = ["rtt-logger"]
 std = []

@@ -118,8 +118,8 @@ where
         }
        
         
-        ufmt::uwrite!(msg, "Received packet: 0x5a, 0x{:02X} ", length).unwrap();
-        msg.write_str(fmt_packet(&recv).as_str());
+        let _ = ufmt::uwrite!(msg, "Received packet: 0x5a, 0x{:02X} ", length).unwrap();
+        let _ = msg.write_str(fmt_packet(recv).as_str());
         debug!("{}", msg.as_str());
     }
 
@@ -127,8 +127,8 @@ where
     fn send_packet(&mut self, packet: &[u8]) {
         let mut msg = heapless::String::<256>::new();
 
-        ufmt::uwrite!(msg, "Sending packet: ");
-        msg.write_str(fmt_packet(&packet).as_str());
+        let _ = ufmt::uwrite!(msg, "Sending packet: ");
+        let _ = msg.write_str(fmt_packet(packet).as_str());
         debug!("{}\n", msg.as_str());
 
         for byte in packet {
@@ -149,7 +149,6 @@ where
         
 
         loop {
-           //info!("Sweepin!");
            let mut recv = [0u8;20];
            length = 0;
            self.receive_packet(&mut recv, &mut length);
@@ -208,7 +207,7 @@ where
                 Ok(Commands::CmdAuth1) => {
                     challenge_version = recv[1];
                     let challenge = &recv[2..];
-                    if let Ok((packet, bchal)) = cmdauth1(challenge_version, &challenge)
+                    if let Ok((packet, bchal)) = cmdauth1(challenge_version, challenge)
                     {
                         challenge1b = bchal;
                         self.send_packet(&build_packet(ResponseType::Ack as u8, &packet));
@@ -217,7 +216,7 @@ where
                 Ok(Commands::CmdAuth2) => {
                     challenge_version = recv[1];
                     let challenge = &recv[2..];
-                    if let Ok(packet) = cmdauth2(challenge_version, &challenge, &challenge1b)
+                    if let Ok(packet) = cmdauth2(challenge_version, challenge, &challenge1b)
                     {
                         self.send_packet(&build_packet(ResponseType::Ack as u8, &packet));
                     }
@@ -303,7 +302,7 @@ fn cmdauth1(version: u8, challenge: &[u8]) -> Result<([u8; 16], [u8; 16]), ()> {
     let mut data = [0u8; 16];
     mix_challenge1(version, challenge, &mut data).unwrap();
     encrypt_bytes(&data, version, &mut challenge1a).unwrap();
-    let second = challenge1a.clone();
+    let second = challenge1a;
     let mut temp = [0u8; 16];
     encrypt_bytes(&second, version, &mut temp).unwrap();
     matrix_swap(&temp, &mut challenge1b);
@@ -393,8 +392,8 @@ fn encrypt_bytes(plain_bytes: &[u8; 16], version: u8, encrypted: &mut [u8]) -> R
     } else {
         let mut ctx = ecb::Encryptor::<Aes128>::new(&GenericArray::from(key.unwrap()));
         let block = GenericArray::from(*plain_bytes);
-        let mut encrypted_gen = GenericArray::from_mut_slice(encrypted);
-        ctx.encrypt_block_b2b_mut(&block, &mut encrypted_gen);
+        let encrypted_gen = GenericArray::from_mut_slice(encrypted);
+        ctx.encrypt_block_b2b_mut(&block, encrypted_gen);
         Ok(())
     }
 }
@@ -411,7 +410,7 @@ fn matrix_swap(key: &[u8], out: &mut [u8]) {
 
 fn checksum(packet: &[u8]) -> u8 {
     let sh: u16 = packet.iter().map(|n| *n as u16).sum();
-    return (0xFFu16 - (sh & 0xffu16)) as u8;
+    (0xFFu16 - (sh & 0xffu16)) as u8
 }
 
 fn build_packet(code: u8, packet: &[u8]) -> [u8;20] {
@@ -426,17 +425,17 @@ fn build_packet(code: u8, packet: &[u8]) -> [u8;20] {
 
 fn fmt_packet(packet: &[u8]) -> heapless::String<256> {
     let mut msg = heapless::String::<256>::new();
-    ufmt::uwrite!(msg, "[").unwrap();
+    let _ = ufmt::uwrite!(msg, "[");
     for (i, byte) in packet.iter().enumerate() {
         if i == packet.len()-1 {
-            ufmt::uwrite!(msg, "0x{:02X}", *byte).unwrap();
+            let _ = ufmt::uwrite!(msg, "0x{:02X}", *byte);
         }
         else
         {
-            ufmt::uwrite!(msg, "0x{:02X}, " *byte).unwrap();
+            let _ = ufmt::uwrite!(msg, "0x{:02X}, " *byte);
         }
     }
-    ufmt::uwrite!(msg, "]").unwrap();
+    let _ = ufmt::uwrite!(msg, "]");
     msg
 }
 
@@ -472,7 +471,7 @@ mod tests {
 
     #[test]
     fn test_challenge_response_cmdauth1() {
-        embedded_logger::StdLogger::init();
+        let _ = embedded_logger::StdLogger::init();
         let challenge: [u8; 13] = [0x5A, 0x0B, 0x80, 0xD9, 0x8E, 0x35, 0xF3, 0x8F, 0x2B, 0x8C, 0x6D, 0x8F, 0x49];
         let expected_response: [u8; 20] = [
             0xA5, 0x12, 0x06, 0x83, 0x32, 0x32, 0xDE, 0xF3, 0x25, 0xA2,
@@ -483,13 +482,13 @@ mod tests {
 
         let challenge_version = challenge[3];
         let ch = &challenge[4..];
-        if let Ok((packet, _ch1b)) = cmdauth1(challenge_version, &ch) {
+        if let Ok((packet, _ch1b)) = cmdauth1(challenge_version, ch) {
             let send = build_packet(code, &packet);
             assert_eq!(send[19], expected_response[19]);
 
             let mut msg = heapless::String::<256>::new();
-            ufmt::uwrite!(msg, "Sending packet: ");
-            msg.write_str(fmt_packet(&send).as_str());
+            let _ = ufmt::uwrite!(msg, "Sending packet: ");
+            let _ = msg.write_str(fmt_packet(&send).as_str());
             debug!("{}\n", msg.as_str());
 
             assert_eq!(expected_response, send);
@@ -498,7 +497,7 @@ mod tests {
 
     #[test]
     fn test_challenge_response_cmdauth2() {
-        embedded_logger::StdLogger::init();
+        let _ = embedded_logger::StdLogger::init();
         let challenge: [u8; 12] = [0x5A, 0x0A, 0x81, 0x13, 0xF1, 0x06, 0x0B, 0x97, 0x9E, 0x9F, 0xF9, 0x38];
         let expected_response: [u8;20] = [
             0xA5, 0x12, 0x06, 0xBA, 0x54, 0x76, 0x57, 0x8E, 0xAF, 0x4E,
@@ -516,8 +515,8 @@ mod tests {
             assert_eq!(send[19], expected_response[19]);
 
             let mut msg = heapless::String::<256>::new();
-            ufmt::uwrite!(msg, "Sending packet: ");
-            msg.write_str(fmt_packet(&send).as_str());
+            let _ = ufmt::uwrite!(msg, "Sending packet: ");
+            let _ = msg.write_str(fmt_packet(&send).as_str());
             debug!("{}\n", msg.as_str());
 
             assert_eq!(expected_response, send);

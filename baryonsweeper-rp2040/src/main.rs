@@ -32,7 +32,7 @@ use bsp::hal::{
 // USB Device support
 use usb_device::{class_prelude::*, prelude::*};
 
-use embedded_logger::CombinedLogger;
+use embedded_logger::UsbLogger;
 
 // USB Communications Class Device support
 use usbd_serial::SerialPort;
@@ -48,7 +48,7 @@ static mut USB_BUS: Option<UsbBusAllocator<hal::usb::UsbBus>> = None;
 /// The USB Serial Device Driver (shared with the interrupt).
 static mut USB_SERIAL: Option<SerialPort<UsbBus>> = None;
 
-static mut LOGGER: Option<CombinedLogger::<UsbBus,256>> = None;
+static mut LOGGER: Option<UsbLogger::<UsbBus,256>> = None;
 
 #[entry]
 fn main() -> ! {
@@ -135,7 +135,7 @@ fn main() -> ! {
     };
 
     let usb_serial = unsafe { USB_SERIAL.as_mut().unwrap() };
-    let logger = CombinedLogger::<UsbBus,256>::new(usb_serial);
+    let logger = UsbLogger::<UsbBus,256>::new(usb_serial);
 
     unsafe { LOGGER = Some(logger) };
     unsafe { log::set_logger_racy( LOGGER.as_ref().unwrap() ).unwrap(); }

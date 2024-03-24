@@ -172,7 +172,6 @@ version = "0.1.0"
 dependencies = [
  "baryonsweeper",
  "cortex-m",
- "critical-section",
  "embedded-logger",
  "metro_m4",
  "panic-rtt-target",
