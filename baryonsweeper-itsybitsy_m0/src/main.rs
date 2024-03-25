@@ -92,10 +92,11 @@ fn main() -> ! {
 
 
     let usb_serial = unsafe { USB_SERIAL.as_mut().unwrap() };
-    let logger = embedded_logger::CombinedLogger::<UsbBus,256>::new(usb_serial);
+    // FIXME
+    let _logger = embedded_logger::UsbLogger::<UsbBus,256>::new(usb_serial);
 
     let timeout: hal::time::Nanoseconds = 500.ms().into();
-    let mut baryon_sweeper = BaryonSweeper::new(uart, timer, led_pin, timeout, logger);
+    let mut baryon_sweeper = BaryonSweeper::new(uart, timer, led_pin, timeout);
     baryon_sweeper.sweep();
     core::unreachable!()
 
