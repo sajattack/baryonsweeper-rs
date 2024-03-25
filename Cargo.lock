@@ -145,7 +145,7 @@ dependencies = [
  "log",
  "nb 1.1.0",
  "num_enum 0.7.1",
- "rtt-target",
+ "rtt-target 0.3.1",
  "ufmt",
  "usb-device",
  "usbd-serial",
@@ -162,7 +162,7 @@ dependencies = [
  "fugit",
  "itsybitsy_m0",
  "panic-rtt-target",
- "rtt-target",
+ "rtt-target 0.3.1",
  "usb-device",
  "usbd-serial",
 ]
@@ -176,7 +176,7 @@ dependencies = [
  "embedded-logger",
  "metro_m4",
  "panic-rtt-target",
- "rtt-target",
+ "rtt-target 0.3.1",
  "spin",
  "usb-device",
  "usbd-serial",
@@ -196,6 +196,7 @@ dependencies = [
  "log",
  "panic-probe",
  "rp-pico",
+ "rtt-target 0.5.0",
  "usb-device",
  "usbd-serial",
 ]
@@ -445,6 +446,7 @@ version = "0.1.0"
 dependencies = [
  "cfg-if",
  "critical-section",
+ "defmt",
  "embedded-hal",
  "heapless",
  "log",
@@ -784,7 +786,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0d6ab67bc881453e4c90f958c657c1303670ea87bc1a16e87fd71a40f656dce9"
 dependencies = [
  "cortex-m",
- "rtt-target",
+ "rtt-target 0.3.1",
 ]
 
 [[package]]
@@ -950,7 +952,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b2f42c228caf6eab0fe8374ef3988b9db07dbe0b12b65b4a02aaacb48b03354e"
 dependencies = [
  "log",
- "rtt-target",
+ "rtt-target 0.3.1",
 ]
 
 [[package]]
@@ -960,6 +962,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "065d6058bb1204f51a562a67209e1817cf714759d5cf845aa45c75fa7b0b9d9b"
 dependencies = [
  "cortex-m",
+ "ufmt-write",
+]
+
+[[package]]
+name = "rtt-target"
+version = "0.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "10b34c9e6832388e45f3c01f1bb60a016384a0a4ad80cdd7d34913bed25037f0"
+dependencies = [
+ "critical-section",
  "ufmt-write",
 ]
 

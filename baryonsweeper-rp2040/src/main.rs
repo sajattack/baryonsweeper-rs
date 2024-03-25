@@ -2,14 +2,9 @@
 #![no_main]
 
 use bsp::{entry, hal::{self, gpio::bank0::{Gpio0, Gpio1}, uart::Parity}};
-use log::{LevelFilter, info};
+use log::{LevelFilter, info, debug};
 
 use defmt_rtt as _;
-
-//defmt::timestamp!("{=u32:us}", {
-    // NOTE(interrupt-safe) single instruction volatile read operation
-    //SYST::get_current()
-//});
 
 use panic_probe as _;
 //use panic_halt as _;
@@ -29,29 +24,26 @@ use bsp::hal::{
 };
 
 // USB Device support
-//use usb_device::{class_prelude::*, prelude::*};
+use usb_device::{class_prelude::*, prelude::*};
 
-//use embedded_logger::UsbLogger;
+use embedded_logger::UsbLogger;
 //use embedded_logger::RTTLogger;
 
 // USB Communications Class Device support
-//use usbd_serial::SerialPort;
+use usbd_serial::SerialPort;
 
 use baryonsweeper::BaryonSweeper;
 
 /// The USB Device Driver (shared with the interrupt).
-//static mut USB_DEVICE: Option<UsbDevice<hal::usb::UsbBus>> = None;
+static mut USB_DEVICE: Option<UsbDevice<hal::usb::UsbBus>> = None;
 
 /// The USB Bus Driver (shared with the interrupt).
-//static mut USB_BUS: Option<UsbBusAllocator<hal::usb::UsbBus>> = None;
+static mut USB_BUS: Option<UsbBusAllocator<hal::usb::UsbBus>> = None;
 
 /// The USB Serial Device Driver (shared with the interrupt).
-//static mut USB_SERIAL: Option<SerialPort<UsbBus>> = None;
+static mut USB_SERIAL: Option<SerialPort<UsbBus>> = None;
 
-//static mut LOGGER: Option<UsbLogger::<UsbBus,256>> = None;
-
-//const LOG_LEVEL: LevelFilter = LevelFilter::Trace;
-//static LOGGER: RTTLogger = RTTLogger::new(LOG_LEVEL);
+static mut LOGGER: Option<UsbLogger::<UsbBus,2048>> = None;
 
 #[entry]
 fn main() -> ! {
@@ -61,7 +53,9 @@ fn main() -> ! {
     let mut watchdog = Watchdog::new(pac.WATCHDOG);
     let sio = Sio::new(pac.SIO);
 
-    info!("Program start");
+
+
+    defmt::println!("Program start");
 
     // External high-speed crystal on the pico board is 12Mhz
     let external_xtal_freq_hz = 12_000_000u32;
@@ -109,7 +103,7 @@ fn main() -> ! {
 
     // Set up the USB driver
  
-    /*unsafe {
+    unsafe {
         pac::NVIC::unmask(hal::pac::Interrupt::USBCTRL_IRQ);
 
         USB_BUS = Some(UsbBusAllocator::new(UsbBus::new(
@@ -139,24 +133,19 @@ fn main() -> ! {
     };
 
     let usb_serial = unsafe { USB_SERIAL.as_mut().unwrap() };
-    let logger = UsbLogger::<UsbBus,256>::new(usb_serial);
+    let logger = UsbLogger::<UsbBus,2048>::new(usb_serial);
 
     unsafe { LOGGER = Some(logger) };
-    unsafe { log::set_logger_racy( LOGGER.as_ref().unwrap() ).unwrap(); }
-    */
-
-    //rtt_init_print!();
-    //log::set_logger(&LOGGER)
-        //.map(|()| log::set_max_level(LOG_LEVEL))
-        //.unwrap();
-
+    unsafe { log::set_logger_racy( LOGGER.as_ref().unwrap() ).map(|()| log::set_max_level_racy(LevelFilter::Info)); }
+    
     let mut baryon_sweeper = BaryonSweeper::new(uart, timer.count_down(), led_pin, 500.millis());
+    defmt::println!("Starting Sweep!");
 
     baryon_sweeper.sweep();
     core::unreachable!()
 }
 
-/*#[allow(non_snake_case)]
+#[allow(non_snake_case)]
 #[interrupt]
 unsafe fn USBCTRL_IRQ() {
     unsafe {
@@ -170,5 +159,5 @@ unsafe fn USBCTRL_IRQ() {
             }
         }
     };
-}*/
+}
 

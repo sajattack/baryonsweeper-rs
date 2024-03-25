@@ -15,6 +15,7 @@ embedded-hal = { version = "0.2.5", optional = true }
 cfg-if = "1.0.0"
 ufmt = "0.2.0"
 critical-section = "1.1.2"
+defmt = "0.3.6"
 
 [features]
 usb = ["usbd-serial", "usb-device"]

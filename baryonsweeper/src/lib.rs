@@ -16,9 +16,9 @@ mod consts;
 
 use consts::*;
 
-#[cfg(feature="std")]
+#[cfg(any(feature="std", feature="usb"))]
 use log::{info, debug};
-#[cfg(not(feature="std"))]
+#[cfg(feature="rtt")]
 use defmt::{info, debug};
 
 #[cfg(feature="metro_m4")]
@@ -95,7 +95,7 @@ where
     }
 
 
-    fn receive_packet(&mut self, recv: &mut [u8; 32], len: &mut u8)
+    fn receive_packet(&mut self, recv: &mut [u8; 64], len: &mut u8)
     where
     T: core::convert::From<TimeoutType> ,<C as CountDown>::Time: From<T>
     {
@@ -122,10 +122,10 @@ where
         
         #[cfg(debug_assertions)]
         {
-            let mut msg = heapless::String::<256>::new();
+            let mut msg = heapless::String::<512>::new();
             let _ = ufmt::uwrite!(msg, "Received packet: 0x5a, 0x{:02X} ", length).unwrap();
             let _ = msg.write_str(fmt_packet((*recv, 20)).as_str());
-            debug!("{}\n", msg.as_str());
+            debug!("{}", msg.as_str());
         }
     }
 
@@ -133,10 +133,10 @@ where
     fn send_packet(&mut self, packet: ([u8;32], usize)) {
         #[cfg(debug_assertions)] 
         {
-            let mut msg = heapless::String::<256>::new();
+            let mut msg = heapless::String::<512>::new();
             let _ = ufmt::uwrite!(msg, "Sending packet: ");
             let _ = msg.write_str(fmt_packet(packet).as_str());
-            debug!("{}\n", msg.as_str());
+            debug!("{}", msg.as_str());
         }
         
         for i in 0..packet.1 {
@@ -157,7 +157,7 @@ where
         
 
         loop {
-           let mut recv = [0u8;32];
+           let mut recv = [0u8;64];
            length = 0;
            self.receive_packet(&mut recv, &mut length);
            if length == 0 {
@@ -214,21 +214,21 @@ where
                 },
                 Ok(Commands::CmdAuth1) => {
                     challenge_version = recv[1];
-                    info!("Challenge version: 0x{:x}", challenge_version);
                     let challenge = &recv[2..];
                     if let Ok((packet, bchal)) = cmdauth1(challenge_version, challenge)
                     {
                         challenge1b = bchal;
                         self.send_packet(build_packet(ResponseType::Ack as u8, &packet));
                     }
+                    info!("Challenge version: 0x{:x}", challenge_version);
                 },
                 Ok(Commands::CmdAuth2) => {
-                    info!("Challenge version: 0x{:x}", challenge_version);
                     let challenge = &recv[2..];
                     if let Ok(packet) = cmdauth2(challenge_version, challenge, &challenge1b)
                     {
                         self.send_packet(build_packet(ResponseType::Ack as u8, &packet));
                     }
+                    info!("Challenge version: 0x{:x}", challenge_version);
                 },
                 _ => {
                     self.send_packet(build_packet(ResponseType::Nak as u8, &[]));
@@ -499,10 +499,10 @@ mod tests {
             let send = build_packet(code, &packet);
             assert_eq!(send.0[19], expected_response[19]);
 
-            let mut msg = heapless::String::<256>::new();
+            let mut msg = heapless::String::<512>::new();
             let _ = ufmt::uwrite!(msg, "Sending packet: ");
             let _ = msg.write_str(fmt_packet(send).as_str());
-            debug!("{}\n", msg.as_str());
+            debug!("{}", msg.as_str());
 
             assert_eq!(expected_response, send.0);
         }
@@ -529,10 +529,10 @@ mod tests {
             let send = build_packet(code, &packet);
             assert_eq!(send.0[19], expected_response[19]);
 
-            let mut msg = heapless::String::<256>::new();
+            let mut msg = heapless::String::<512>::new();
             let _ = ufmt::uwrite!(msg, "Sending packet: ");
             let _ = msg.write_str(fmt_packet(send).as_str());
-            debug!("{}\n", msg.as_str());
+            debug!("{}", msg.as_str());
 
             assert_eq!(expected_response, send.0);
         }
