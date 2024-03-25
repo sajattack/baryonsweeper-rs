@@ -21,6 +21,7 @@ itsybitsy_m0 = { version = "0.13", optional=true }
 embedded-logger = { path = "../embedded-logger" }
 ecb = "0.1.2"
 log = "0.4.20"
+defmt = "0.3.6"
 
 
 [features]

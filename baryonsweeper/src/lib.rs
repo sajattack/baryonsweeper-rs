@@ -16,7 +16,10 @@ mod consts;
 
 use consts::*;
 
+#[cfg(feature="std")]
 use log::{info, debug};
+#[cfg(not(feature="std"))]
+use defmt::{info, debug};
 
 #[cfg(feature="metro_m4")]
 type TimeoutType = fugit::NanosDurationU32;
@@ -92,7 +95,7 @@ where
     }
 
 
-    fn receive_packet(&mut self, recv: &mut [u8], len: &mut u8)
+    fn receive_packet(&mut self, recv: &mut [u8; 32], len: &mut u8)
     where
     T: core::convert::From<TimeoutType> ,<C as CountDown>::Time: From<T>
     {
@@ -121,13 +124,13 @@ where
         {
             let mut msg = heapless::String::<256>::new();
             let _ = ufmt::uwrite!(msg, "Received packet: 0x5a, 0x{:02X} ", length).unwrap();
-            let _ = msg.write_str(fmt_packet(recv).as_str());
-            debug!("{}", msg.as_str());
+            let _ = msg.write_str(fmt_packet((*recv, 20)).as_str());
+            debug!("{}\n", msg.as_str());
         }
     }
 
 
-    fn send_packet(&mut self, packet: &[u8]) {
+    fn send_packet(&mut self, packet: ([u8;32], usize)) {
         #[cfg(debug_assertions)] 
         {
             let mut msg = heapless::String::<256>::new();
@@ -135,9 +138,9 @@ where
             let _ = msg.write_str(fmt_packet(packet).as_str());
             debug!("{}\n", msg.as_str());
         }
-
-        for byte in packet {
-            block!(self.serial.write(*byte)).map_err(|_| ()).unwrap();
+        
+        for i in 0..packet.1 {
+            let _ = block!(self.serial.write(packet.0[i])).map_err(|_|());
         }
     }
 
@@ -147,14 +150,14 @@ where
     {
 
         let mut length: u8;
-        let mut challenge_version: u8;
+        let mut challenge_version: u8 = 0;
         let mut challenge1b = [0u8; 16];
 
         info!("Beginning the sweep!");
         
 
         loop {
-           let mut recv = [0u8;20];
+           let mut recv = [0u8;32];
            length = 0;
            self.receive_packet(&mut recv, &mut length);
            if length == 0 {
@@ -166,68 +169,69 @@ where
            match recv[0].try_into() {
                 Ok(Commands::CmdReadStatus) => {
                     let response = cmd_read_status();
-                    self.send_packet(&build_packet(ResponseType::Ack as u8, &response));
+                    self.send_packet(build_packet(ResponseType::Ack as u8, &response));
                 },
                 Ok(Commands::CmdReadTemperature) => {
                     let response = cmd_read_temperature();
-                    self.send_packet(&build_packet(ResponseType::Ack as u8, &response));
+                    self.send_packet(build_packet(ResponseType::Ack as u8, &response));
                 },
                 Ok(Commands::CmdReadVoltage) => {
                     let response = cmd_read_voltage();
-                    self.send_packet(&build_packet(ResponseType::Ack as u8, &response));
+                    self.send_packet(build_packet(ResponseType::Ack as u8, &response));
                 },
                 Ok(Commands::CmdReadCurrent) => {
                     let response = cmd_read_current();
-                    self.send_packet(&build_packet(ResponseType::Ack as u8, &response));
+                    self.send_packet(build_packet(ResponseType::Ack as u8, &response));
                 },
                 Ok(Commands::CmdReadCapacity) => {
                     let response = cmd_read_capacity();
-                    self.send_packet(&build_packet(ResponseType::Ack as u8, &response));
+                    self.send_packet(build_packet(ResponseType::Ack as u8, &response));
                 },
                 Ok(Commands::CmdRead8) => {
                     let response = cmd_read8();
-                    self.send_packet(&build_packet(ResponseType::Ack as u8, &response));
+                    self.send_packet(build_packet(ResponseType::Ack as u8, &response));
                 },
                 Ok(Commands::CmdReadTimeLeft) => {
                     let response = cmd_read_time_left();
-                    self.send_packet(&build_packet(ResponseType::Ack as u8, &response));
+                    self.send_packet(build_packet(ResponseType::Ack as u8, &response));
 
                 },
                 Ok(Commands::CmdRead11) => {
                     let response = cmd_read11();
-                    self.send_packet(&build_packet(ResponseType::Ack as u8, &response));
+                    self.send_packet(build_packet(ResponseType::Ack as u8, &response));
                 },
                 Ok(Commands::CmdReadSerialno) => {
                     let response = cmd_read_serialno();
-                    self.send_packet(&build_packet(ResponseType::Ack as u8, &response));
+                    self.send_packet(build_packet(ResponseType::Ack as u8, &response));
                 },
                 Ok(Commands::CmdRead13) => {
                     let response = cmd_read13();
-                    self.send_packet(&build_packet(ResponseType::Ack as u8, &response));
+                    self.send_packet(build_packet(ResponseType::Ack as u8, &response));
                 },
                 Ok(Commands::CmdRead22) => {
                     let response = cmd_read22();
-                    self.send_packet(&build_packet(ResponseType::Ack as u8, &response));
+                    self.send_packet(build_packet(ResponseType::Ack as u8, &response));
                 },
                 Ok(Commands::CmdAuth1) => {
                     challenge_version = recv[1];
+                    info!("Challenge version: 0x{:x}", challenge_version);
                     let challenge = &recv[2..];
                     if let Ok((packet, bchal)) = cmdauth1(challenge_version, challenge)
                     {
                         challenge1b = bchal;
-                        self.send_packet(&build_packet(ResponseType::Ack as u8, &packet));
+                        self.send_packet(build_packet(ResponseType::Ack as u8, &packet));
                     }
                 },
                 Ok(Commands::CmdAuth2) => {
-                    challenge_version = recv[1];
+                    info!("Challenge version: 0x{:x}", challenge_version);
                     let challenge = &recv[2..];
                     if let Ok(packet) = cmdauth2(challenge_version, challenge, &challenge1b)
                     {
-                        self.send_packet(&build_packet(ResponseType::Ack as u8, &packet));
+                        self.send_packet(build_packet(ResponseType::Ack as u8, &packet));
                     }
                 },
                 _ => {
-                    self.send_packet(&build_packet(ResponseType::Nak as u8, &[]));
+                    self.send_packet(build_packet(ResponseType::Nak as u8, &[]));
                         info!("Sending General NAK!");
                 }           
            }
@@ -418,26 +422,27 @@ fn checksum(packet: &[u8]) -> u8 {
     (0xFFu16 - (sh & 0xffu16)) as u8
 }
 
-fn build_packet(code: u8, packet: &[u8]) -> [u8;20] {
-    let mut full_packet = [0u8; 20];
+fn build_packet(code: u8, packet: &[u8]) -> ([u8;32], usize) {
+    let mut full_packet = [0u8; 32];
     full_packet[0] = 0xA5;
     full_packet[1] = (packet.len() + 2) as u8;
     full_packet[2] = code;
     full_packet[3..packet.len()+3].copy_from_slice(packet);
     full_packet[packet.len() + 3] = checksum(&full_packet[0..packet.len()+3]);
-    full_packet
+    (full_packet, packet.len()+4)
 }
 
-fn fmt_packet(packet: &[u8]) -> heapless::String<256> {
-    let mut msg = heapless::String::<256>::new();
+fn fmt_packet(packet: ([u8;32], usize)) -> heapless::String<512> {
+    let mut msg = heapless::String::<512>::new();
     let _ = ufmt::uwrite!(msg, "[");
-    for (i, byte) in packet.iter().enumerate() {
-        if i == packet.len()-1 {
-            let _ = ufmt::uwrite!(msg, "0x{:02X}", *byte);
+    for i in 0..packet.1 {
+        let byte = packet.0[i];
+        if i == packet.1-1 {
+            let _ = ufmt::uwrite!(msg, "0x{:02X}", byte);
         }
         else
         {
-            let _ = ufmt::uwrite!(msg, "0x{:02X}, " *byte);
+            let _ = ufmt::uwrite!(msg, "0x{:02X}, " byte);
         }
     }
     let _ = ufmt::uwrite!(msg, "]");
@@ -478,9 +483,12 @@ mod tests {
     fn test_challenge_response_cmdauth1() {
         let _ = embedded_logger::StdLogger::init();
         let challenge: [u8; 13] = [0x5A, 0x0B, 0x80, 0xD9, 0x8E, 0x35, 0xF3, 0x8F, 0x2B, 0x8C, 0x6D, 0x8F, 0x49];
-        let expected_response: [u8; 20] = [
+        let expected_response: [u8; 32] = [
             0xA5, 0x12, 0x06, 0x83, 0x32, 0x32, 0xDE, 0xF3, 0x25, 0xA2,
-            0x7C, 0x1A, 0xC9, 0x21, 0x7A, 0xE9, 0x8F, 0xBE, 0x22, 0x71
+            0x7C, 0x1A, 0xC9, 0x21, 0x7A, 0xE9, 0x8F, 0xBE, 0x22, 0x71,
+            0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+            0x00, 0x00 
+
         ];
 
         let code: u8 = ResponseType::Ack as u8;
@@ -489,14 +497,14 @@ mod tests {
         let ch = &challenge[4..];
         if let Ok((packet, _ch1b)) = cmdauth1(challenge_version, ch) {
             let send = build_packet(code, &packet);
-            assert_eq!(send[19], expected_response[19]);
+            assert_eq!(send.0[19], expected_response[19]);
 
             let mut msg = heapless::String::<256>::new();
             let _ = ufmt::uwrite!(msg, "Sending packet: ");
-            let _ = msg.write_str(fmt_packet(&send).as_str());
+            let _ = msg.write_str(fmt_packet(send).as_str());
             debug!("{}\n", msg.as_str());
 
-            assert_eq!(expected_response, send);
+            assert_eq!(expected_response, send.0);
         }
     }
 
@@ -504,9 +512,11 @@ mod tests {
     fn test_challenge_response_cmdauth2() {
         let _ = embedded_logger::StdLogger::init();
         let challenge: [u8; 12] = [0x5A, 0x0A, 0x81, 0x13, 0xF1, 0x06, 0x0B, 0x97, 0x9E, 0x9F, 0xF9, 0x38];
-        let expected_response: [u8;20] = [
+        let expected_response: [u8;32] = [
             0xA5, 0x12, 0x06, 0xBA, 0x54, 0x76, 0x57, 0x8E, 0xAF, 0x4E,
-            0x8F, 0xAD,  0xF2, 0xA3, 0x55, 0xDA, 0x10, 0xC2, 0x1D, 0xED
+            0x8F, 0xAD, 0xF2, 0xA3, 0x55, 0xDA, 0x10, 0xC2, 0x1D, 0xED,
+            0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+            0x00, 0x00 
         ];
 
 
@@ -517,14 +527,14 @@ mod tests {
 
         if let Ok(packet) = cmdauth2(challenge_version, &challenge, &challenge1b) {
             let send = build_packet(code, &packet);
-            assert_eq!(send[19], expected_response[19]);
+            assert_eq!(send.0[19], expected_response[19]);
 
             let mut msg = heapless::String::<256>::new();
             let _ = ufmt::uwrite!(msg, "Sending packet: ");
-            let _ = msg.write_str(fmt_packet(&send).as_str());
+            let _ = msg.write_str(fmt_packet(send).as_str());
             debug!("{}\n", msg.as_str());
 
-            assert_eq!(expected_response, send);
+            assert_eq!(expected_response, send.0);
         }
     }
 }
