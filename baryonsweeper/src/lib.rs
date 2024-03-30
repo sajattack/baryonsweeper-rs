@@ -5,7 +5,7 @@ use nb::block;
 use num_enum::TryFromPrimitive;
 use aes::Aes128;
 use aes::cipher::{
-    BlockEncryptMut, KeyInit,
+    KeyIvInit, BlockDecryptMut, BlockEncryptMut, KeyInit, 
     generic_array::GenericArray,
 };
 use ufmt::uWrite;
@@ -130,7 +130,7 @@ where
     }
 
 
-    fn send_packet(&mut self, packet: ([u8;32], usize)) {
+    fn send_packet(&mut self, packet: ([u8;64], usize)) {
         #[cfg(debug_assertions)] 
         {
             let mut msg = heapless::String::<512>::new();
@@ -229,6 +229,18 @@ where
                         self.send_packet(build_packet(ResponseType::Ack as u8, &packet));
                     }
                     info!("Challenge version: 0x{:x}", challenge_version);
+                    if challenge_version == 0xeb || challenge_version == 0xb3 {
+                        let mut packet2 = [0u8; 64];
+                        packet2[0..4].copy_from_slice(&[0x5a, 0x02, 0x01, 0xa2]);
+                        self.send_packet((packet2, 4));
+                    }
+                },
+                Ok(Commands::CmdAuthGo) => {
+                    let screq = &recv[3..];
+                    if let Ok(packet) = cmdauthgo(screq)
+                    {
+                        self.send_packet(build_packet(ResponseType::Ack as u8, &packet));
+                    }
                 },
                 _ => {
                     self.send_packet(build_packet(ResponseType::Nak as u8, &[]));
@@ -335,6 +347,51 @@ fn cmdauth2(challenge_version: u8, _challenge: &[u8], ch1b: &[u8]) -> Result<[u8
     Ok(packet)
 }
 
+fn cmdauthgo(screq: &[u8]) -> Result<[u8; 40], ()>
+{
+    info!("CmdAuthGo");
+    let mut enc = [[0u8; 16]; 2];
+    enc[0].copy_from_slice(&screq[8..24]);
+    enc[1].copy_from_slice(&screq[24..40]);
+    let key = GenericArray::from(GO_KEY1);
+    let iv = GenericArray::from([0u8; 16]);
+
+    let mut decryptor = cbc::Decryptor::<Aes128>::new(&key, &iv);
+    let block1 = GenericArray::from(enc[0]);
+    let block2 = GenericArray::from(enc[1]);
+    let mut blocks = [block1, block2];
+    decryptor.decrypt_blocks_mut(&mut blocks);
+
+
+    let decrypted = blocks.as_slice();
+
+    if decrypted[1].as_slice() == GO_SECRET {
+        info!("Go handshake request is valid");
+    } else {
+        info!("Invalid request from Syscon");
+        info!("{:x?}", decrypted[1]);
+        return Err(())
+    }
+
+    let mut response_payload = [[0u8; 16]; 2];
+    response_payload[0][0..8].copy_from_slice(&decrypted[0][8..16]);
+    response_payload[0][8..16].copy_from_slice(&decrypted[0][0..8]);
+
+    let key = GenericArray::from(GO_KEY2);
+    let mut decryptor = cbc::Decryptor::<Aes128>::new(&key, &iv);
+    let block1 = GenericArray::from(response_payload[0]);
+    let block2 = GenericArray::from(response_payload[1]);
+    let mut blocks = [block1, block2];
+    decryptor.decrypt_blocks_mut(&mut blocks);
+    let decrypted = blocks.as_slice();
+
+    let mut packet = [0u8; 40];
+    packet[0..8].copy_from_slice(&[0x20, 0x01, 0x00, 0x00, 0x82, 0x82, 0x82, 0x82]);
+    packet[8..24].copy_from_slice(decrypted[0].as_slice());
+    packet[24..40].copy_from_slice(decrypted[1].as_slice());
+    Ok(packet)
+}
+
 fn mix_challenge1(version: u8, challenge: &[u8], data: &mut [u8]) -> Result<(), ()>
 {
     let mut secret1: Option<[u8;8]> = None;
@@ -344,6 +401,7 @@ fn mix_challenge1(version: u8, challenge: &[u8], data: &mut [u8]) -> Result<(), 
         }
     }
     if secret1.is_none() {
+        info!("secret1 not found");
         Err(())
     } else {
         for i in 0..8 {
@@ -365,6 +423,7 @@ fn mix_challenge2(version: u8, challenge: &[u8], data: &mut [u8]) -> Result<(), 
         }
     }
     if secret2.is_none() {
+        info!("secret2 not found");
         Err(())
     } else {
         let secret2 = secret2.unwrap();
@@ -422,8 +481,8 @@ fn checksum(packet: &[u8]) -> u8 {
     (0xFFu16 - (sh & 0xffu16)) as u8
 }
 
-fn build_packet(code: u8, packet: &[u8]) -> ([u8;32], usize) {
-    let mut full_packet = [0u8; 32];
+fn build_packet(code: u8, packet: &[u8]) -> ([u8;64], usize) {
+    let mut full_packet = [0u8; 64];
     full_packet[0] = 0xA5;
     full_packet[1] = (packet.len() + 2) as u8;
     full_packet[2] = code;
@@ -432,7 +491,7 @@ fn build_packet(code: u8, packet: &[u8]) -> ([u8;32], usize) {
     (full_packet, packet.len()+4)
 }
 
-fn fmt_packet(packet: ([u8;32], usize)) -> heapless::String<512> {
+fn fmt_packet(packet: ([u8;64], usize)) -> heapless::String<512> {
     let mut msg = heapless::String::<512>::new();
     let _ = ufmt::uwrite!(msg, "[");
     for i in 0..packet.1 {
@@ -467,6 +526,7 @@ enum Commands {
     CmdRead22 = 22,
     CmdAuth1 = 0x80,
     CmdAuth2,
+    CmdAuthGo = 0x90,
 }
 
 #[repr(u8)]
@@ -483,12 +543,9 @@ mod tests {
     fn test_challenge_response_cmdauth1() {
         let _ = embedded_logger::StdLogger::init();
         let challenge: [u8; 13] = [0x5A, 0x0B, 0x80, 0xD9, 0x8E, 0x35, 0xF3, 0x8F, 0x2B, 0x8C, 0x6D, 0x8F, 0x49];
-        let expected_response: [u8; 32] = [
+        let expected_response: [u8; 20] = [
             0xA5, 0x12, 0x06, 0x83, 0x32, 0x32, 0xDE, 0xF3, 0x25, 0xA2,
             0x7C, 0x1A, 0xC9, 0x21, 0x7A, 0xE9, 0x8F, 0xBE, 0x22, 0x71,
-            0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-            0x00, 0x00 
-
         ];
 
         let code: u8 = ResponseType::Ack as u8;
@@ -504,7 +561,9 @@ mod tests {
             let _ = msg.write_str(fmt_packet(send).as_str());
             debug!("{}", msg.as_str());
 
-            assert_eq!(expected_response, send.0);
+            assert_eq!(expected_response, send.0[..send.1]);
+        } else {
+            assert!(false, "cmdauth1 returned err");
         }
     }
 
@@ -512,11 +571,9 @@ mod tests {
     fn test_challenge_response_cmdauth2() {
         let _ = embedded_logger::StdLogger::init();
         let challenge: [u8; 12] = [0x5A, 0x0A, 0x81, 0x13, 0xF1, 0x06, 0x0B, 0x97, 0x9E, 0x9F, 0xF9, 0x38];
-        let expected_response: [u8;32] = [
+        let expected_response: [u8;20] = [
             0xA5, 0x12, 0x06, 0xBA, 0x54, 0x76, 0x57, 0x8E, 0xAF, 0x4E,
             0x8F, 0xAD, 0xF2, 0xA3, 0x55, 0xDA, 0x10, 0xC2, 0x1D, 0xED,
-            0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-            0x00, 0x00 
         ];
 
 
@@ -534,7 +591,30 @@ mod tests {
             let _ = msg.write_str(fmt_packet(send).as_str());
             debug!("{}", msg.as_str());
 
-            assert_eq!(expected_response, send.0);
+            assert_eq!(expected_response, send.0[..send.1]);
+        } else {
+            assert!(false, "cmdauth2 returned err");
+        }
+    }
+
+    #[test]
+    fn test_challenge_response_cmdauthgo() {
+        let _ = embedded_logger::StdLogger::init();
+        let challenge = [0x5A, 0x2A, 0x90, 0x20, 0x10, 0x00, 0x06, 0x82, 0x82, 0x82, 0x82, 0xCB, 0xA3, 0xDB, 0xAC, 0x00, 0xDF, 0x26, 0xF8, 0xDD, 0x5B, 0x0D, 0xAC, 0x91, 0x9A, 0xCF, 0x0B, 0x63, 0x26, 0x06, 0x18, 0xE6, 0x30, 0x4F, 0xDF, 0xE1, 0x6C, 0xEE, 0xA5, 0x16, 0x4E, 0x94, 0x15, 0xED];
+        let expected_response = [0xA5, 0x2A, 0x06, 0x20, 0x01, 0x00, 0x00, 0x82, 0x82, 0x82, 0x82, 0x82, 0x62, 0xDA, 0xD6, 0x79, 0x3C, 0x82, 0x92, 0x50, 0xEB, 0xC8, 0x86, 0x37, 0x23, 0x49,0x49,0xF5, 0xE6, 0x97, 0xC2, 0xF0, 0x76, 0x05, 0x73, 0xD7, 0x59, 0x2D, 0xC6, 0xE5, 0x27,0x5F,0x6D,0x22];
+        let code = ResponseType::Ack as u8;
+        let screq = &challenge[3..];
+    
+        if let Ok(packet) = cmdauthgo(&screq) {
+            let send = build_packet(code, &packet);
+            let mut msg = heapless::String::<512>::new();
+            let _ = ufmt::uwrite!(msg, "Sending packet: ");
+            let _ = msg.write_str(fmt_packet(send).as_str());
+            debug!("{}", msg.as_str());
+
+            assert_eq!(expected_response, send.0[..send.1]);
+        } else {
+            assert!(false, "cmdauthgo returned err");
         }
     }
 }
