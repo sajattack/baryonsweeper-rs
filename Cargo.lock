@@ -137,7 +137,6 @@ dependencies = [
  "aes 0.8.3",
  "cbc",
  "defmt",
- "ecb",
  "embedded-hal",
  "embedded-logger",
  "fugit",
@@ -414,15 +413,6 @@ checksum = "609923761264dd99ed9c7d209718cda4631c5fe84668e0f0960124cbb844c49f"
 dependencies = [
  "critical-section",
  "defmt",
-]
-
-[[package]]
-name = "ecb"
-version = "0.1.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1a8bfa975b1aec2145850fcaa1c6fe269a16578c44705a532ae3edc92b8881c7"
-dependencies = [
- "cipher 0.4.4",
 ]
 
 [[package]]

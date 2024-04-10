@@ -124,23 +124,23 @@ where
         {
             let mut msg = heapless::String::<512>::new();
             let _ = ufmt::uwrite!(msg, "Received packet: 0x5a, 0x{:02X} ", length).unwrap();
-            let _ = msg.write_str(fmt_packet((*recv, 20)).as_str());
+            let _ = msg.write_str(fmt_packet(recv, length.into()).as_str());
             debug!("{}", msg.as_str());
         }
     }
 
 
-    fn send_packet(&mut self, packet: ([u8;64], usize)) {
+    fn send_packet(&mut self, packet: &[u8], size: usize) {
         #[cfg(debug_assertions)] 
         {
             let mut msg = heapless::String::<512>::new();
             let _ = ufmt::uwrite!(msg, "Sending packet: ");
-            let _ = msg.write_str(fmt_packet(packet).as_str());
+            let _ = msg.write_str(fmt_packet(packet, size).as_str());
             debug!("{}", msg.as_str());
         }
         
-        for i in 0..packet.1 {
-            let _ = block!(self.serial.write(packet.0[i])).map_err(|_|());
+        for i in 0..size {
+            let _ = block!(self.serial.write(packet[i])).map_err(|_|());
         }
     }
 
@@ -169,81 +169,100 @@ where
            match recv[0].try_into() {
                 Ok(Commands::CmdReadStatus) => {
                     let response = cmd_read_status();
-                    self.send_packet(build_packet(ResponseType::Ack as u8, &response));
+                    let packet = build_packet(ResponseType::Ack as u8, &response);
+                    self.send_packet(&packet.0, packet.1);
                 },
                 Ok(Commands::CmdReadTemperature) => {
                     let response = cmd_read_temperature();
-                    self.send_packet(build_packet(ResponseType::Ack as u8, &response));
+                    let packet = build_packet(ResponseType::Ack as u8, &response);
+                    self.send_packet(&packet.0, packet.1);
                 },
                 Ok(Commands::CmdReadVoltage) => {
                     let response = cmd_read_voltage();
-                    self.send_packet(build_packet(ResponseType::Ack as u8, &response));
+                    let packet = build_packet(ResponseType::Ack as u8, &response);
+                    self.send_packet(&packet.0, packet.1);
                 },
                 Ok(Commands::CmdReadCurrent) => {
                     let response = cmd_read_current();
-                    self.send_packet(build_packet(ResponseType::Ack as u8, &response));
+                    let packet = build_packet(ResponseType::Ack as u8, &response);
+                    self.send_packet(&packet.0, packet.1);
                 },
                 Ok(Commands::CmdReadCapacity) => {
                     let response = cmd_read_capacity();
-                    self.send_packet(build_packet(ResponseType::Ack as u8, &response));
+                    let packet = build_packet(ResponseType::Ack as u8, &response);
+                    self.send_packet(&packet.0, packet.1);
                 },
                 Ok(Commands::CmdRead8) => {
                     let response = cmd_read8();
-                    self.send_packet(build_packet(ResponseType::Ack as u8, &response));
+                    let packet = build_packet(ResponseType::Ack as u8, &response);
+                    self.send_packet(&packet.0, packet.1);
                 },
                 Ok(Commands::CmdReadTimeLeft) => {
                     let response = cmd_read_time_left();
-                    self.send_packet(build_packet(ResponseType::Ack as u8, &response));
+                    let packet = build_packet(ResponseType::Ack as u8, &response);
+                    self.send_packet(&packet.0, packet.1);
 
                 },
                 Ok(Commands::CmdRead11) => {
                     let response = cmd_read11();
-                    self.send_packet(build_packet(ResponseType::Ack as u8, &response));
+                    let packet = build_packet(ResponseType::Ack as u8, &response);
+                    self.send_packet(&packet.0, packet.1);
                 },
                 Ok(Commands::CmdReadSerialno) => {
                     let response = cmd_read_serialno();
-                    self.send_packet(build_packet(ResponseType::Ack as u8, &response));
+                    let packet = build_packet(ResponseType::Ack as u8, &response);
+                    self.send_packet(&packet.0, packet.1);
                 },
                 Ok(Commands::CmdRead13) => {
                     let response = cmd_read13();
-                    self.send_packet(build_packet(ResponseType::Ack as u8, &response));
+                    let packet = build_packet(ResponseType::Ack as u8, &response);
+                    self.send_packet(&packet.0, packet.1);
                 },
                 Ok(Commands::CmdRead22) => {
                     let response = cmd_read22();
-                    self.send_packet(build_packet(ResponseType::Ack as u8, &response));
+                    let packet = build_packet(ResponseType::Ack as u8, &response);
+                    self.send_packet(&packet.0, packet.1);
                 },
                 Ok(Commands::CmdAuth1) => {
                     challenge_version = recv[1];
                     let challenge = &recv[2..];
-                    if let Ok((packet, bchal)) = cmdauth1(challenge_version, challenge)
+                    if let Ok((response, bchal)) = cmdauth1(challenge_version, challenge)
                     {
                         challenge1b = bchal;
-                        self.send_packet(build_packet(ResponseType::Ack as u8, &packet));
+                        let packet = build_packet(ResponseType::Ack as u8, &response);
+                        self.send_packet(&packet.0, packet.1);
                     }
                     info!("Challenge version: 0x{:x}", challenge_version);
                 },
                 Ok(Commands::CmdAuth2) => {
                     let challenge = &recv[2..];
-                    if let Ok(packet) = cmdauth2(challenge_version, challenge, &challenge1b)
+                    if let Ok(response) = cmdauth2(challenge_version, challenge, &challenge1b)
                     {
-                        self.send_packet(build_packet(ResponseType::Ack as u8, &packet));
+                        let packet = build_packet(ResponseType::Ack as u8, &response);
+                        self.send_packet(&packet.0, packet.1);
                     }
                     info!("Challenge version: 0x{:x}", challenge_version);
                     if challenge_version == 0xeb || challenge_version == 0xb3 {
                         let mut packet2 = [0u8; 64];
                         packet2[0..4].copy_from_slice(&[0x5a, 0x02, 0x01, 0xa2]);
-                        self.send_packet((packet2, 4));
+                        self.send_packet(&packet2, 4);
                     }
                 },
                 Ok(Commands::CmdAuthGo) => {
                     let screq = &recv[3..];
-                    if let Ok(packet) = cmdauthgo(screq)
+                    if let Ok(response) = cmdauthgo(screq)
                     {
-                        self.send_packet(build_packet(ResponseType::Ack as u8, &packet));
+                        let packet = build_packet(ResponseType::Ack as u8, &response);
+                        self.send_packet(&packet.0, packet.1);
+                    }
+                    else 
+                    {
+                        info!("CmdAuthGo returned error")
                     }
                 },
                 _ => {
-                    self.send_packet(build_packet(ResponseType::Nak as u8, &[]));
+                    let packet = build_packet(ResponseType::Nak as u8, &[]);
+                    self.send_packet(&packet.0, packet.1);
                         info!("Sending General NAK!");
                 }           
            }
@@ -321,15 +340,72 @@ fn cmdauth1(version: u8, challenge: &[u8]) -> Result<([u8; 16], [u8; 16]), ()> {
     let mut challenge1a = [0u8; 16];
     let mut challenge1b = [0u8; 16];
     let mut data = [0u8; 16];
+
+    #[cfg(debug_assertions)]
+    let mut msg = heapless::String::<1024>::new();
+
+    #[cfg(debug_assertions)]
+    {
+        let _ = ufmt::uwrite!(msg, "challenge: ");
+        msg.write_str(fmt_packet(challenge, challenge.len()).as_str());
+        debug!("{}", msg.as_str());
+        msg.clear();
+    }
+
     mix_challenge1(version, challenge, &mut data).unwrap();
+
+    #[cfg(debug_assertions)]
+    {
+        let _ = ufmt::uwrite!(msg, "mixed: ");
+        msg.write_str(fmt_packet(&data, data.len()).as_str());
+        debug!("{}", msg.as_str());
+        msg.clear();
+    }
+
     encrypt_bytes(&data, version, &mut challenge1a).unwrap();
+
+    #[cfg(debug_assertions)]
+    {
+        let _ = ufmt::uwrite!(msg, "ch1a: ");
+        msg.write_str(fmt_packet(&challenge1a, challenge1a.len()).as_str());
+        debug!("{}", msg.as_str());
+        msg.clear();
+    }
+
     let second = challenge1a;
     let mut temp = [0u8; 16];
     encrypt_bytes(&second, version, &mut temp).unwrap();
+
+    #[cfg(debug_assertions)]
+    {
+        let _ = ufmt::uwrite!(msg, "temp: ");
+        msg.write_str(fmt_packet(&temp, temp.len()).as_str());
+        debug!("{}", msg.as_str());
+        msg.clear();
+    }
+
     matrix_swap(&temp, &mut challenge1b);
+
+    #[cfg(debug_assertions)]
+    {
+        let _ = ufmt::uwrite!(msg, "ch1b: ");
+        msg.write_str(fmt_packet(&challenge1b, challenge1b.len()).as_str());
+        debug!("{}", msg.as_str());
+        msg.clear();
+    }
+
     let mut packet = [0u8; 16];
     packet[0..8].copy_from_slice(&challenge1a[0..8]);
     packet[8..16].copy_from_slice(&challenge1b[0..8]);
+
+    #[cfg(debug_assertions)]
+    {
+        let _ = ufmt::uwrite!(msg, "AB: ");
+        msg.write_str(fmt_packet(&packet, packet.len()).as_str());
+        debug!("{}", msg.as_str());
+        msg.clear();
+    }
+
     Ok((packet, challenge1b))
 }
 
@@ -340,10 +416,58 @@ fn cmdauth2(challenge_version: u8, _challenge: &[u8], ch1b: &[u8]) -> Result<[u8
     let mut challenge2 = [0u8; 16];
     let mut temp = [0u8; 16];
     let mut packet = [0u8; 16];
+
+    #[cfg(debug_assertions)]
+    let mut msg = heapless::String::<1024>::new();
+
+    #[cfg(debug_assertions)]
+    {
+        let _ = ufmt::uwrite!(msg, "ch1b: ");
+        msg.write_str(fmt_packet(&ch1b, ch1b.len()).as_str());
+        debug!("{}", msg.as_str());
+        msg.clear();
+    }
+
     mix_challenge2(challenge_version, &ch1b[0..8], &mut temp).unwrap();
+
+    #[cfg(debug_assertions)]
+    {
+        let _ = ufmt::uwrite!(msg, "mixed: ");
+        msg.write_str(fmt_packet(&temp, temp.len()).as_str());
+        debug!("{}", msg.as_str());
+        msg.clear();
+    }
+
     matrix_swap(&temp, &mut data2);
+
+    #[cfg(debug_assertions)]
+    {
+        let _ = ufmt::uwrite!(msg, "swapped: ");
+        msg.write_str(fmt_packet(&data2, data2.len()).as_str());
+        debug!("{}", msg.as_str());
+        msg.clear();
+    }
+
     encrypt_bytes(&data2, challenge_version, &mut challenge2).unwrap();
+
+    #[cfg(debug_assertions)]
+    {
+        let _ = ufmt::uwrite!(msg, "enc1: ");
+        msg.write_str(fmt_packet(&challenge2, challenge2.len()).as_str());
+        debug!("{}", msg.as_str());
+        msg.clear();
+    }
+
     encrypt_bytes(&challenge2, challenge_version, &mut packet).unwrap();
+
+    #[cfg(debug_assertions)]
+    {
+        let _ = ufmt::uwrite!(msg, "enc2: ");
+        msg.write_str(fmt_packet(&packet, packet.len()).as_str());
+        debug!("{}", msg.as_str());
+        msg.clear();
+    }
+
     Ok(packet)
 }
 
@@ -354,7 +478,7 @@ fn cmdauthgo(screq: &[u8]) -> Result<[u8; 40], ()>
     enc[0].copy_from_slice(&screq[8..24]);
     enc[1].copy_from_slice(&screq[24..40]);
     let key = GenericArray::from(GO_KEY1);
-    let iv = GenericArray::from([0u8; 16]);
+    let iv = GenericArray::from([0u8;16]);
 
     let mut decryptor = cbc::Decryptor::<Aes128>::new(&key, &iv);
     let block1 = GenericArray::from(enc[0]);
@@ -369,7 +493,6 @@ fn cmdauthgo(screq: &[u8]) -> Result<[u8; 40], ()>
         info!("Go handshake request is valid");
     } else {
         info!("Invalid request from Syscon");
-        info!("{:x?}", decrypted[1]);
         return Err(())
     }
 
@@ -458,10 +581,10 @@ fn encrypt_bytes(plain_bytes: &[u8; 16], version: u8, encrypted: &mut [u8]) -> R
     if key.is_none() {
         Err(())
     } else {
-        let mut ctx = ecb::Encryptor::<Aes128>::new(&GenericArray::from(key.unwrap()));
-        let block = GenericArray::from(*plain_bytes);
-        let encrypted_gen = GenericArray::from_mut_slice(encrypted);
-        ctx.encrypt_block_b2b_mut(&block, encrypted_gen);
+        let mut ctx = cbc::Encryptor::<Aes128>::new(&GenericArray::from(key.unwrap()), &GenericArray::from([0u8; 16]));
+        let mut block = GenericArray::from(*plain_bytes);
+        ctx.encrypt_block_mut(&mut block);
+        encrypted.copy_from_slice(block.as_slice());
         Ok(())
     }
 }
@@ -491,12 +614,12 @@ fn build_packet(code: u8, packet: &[u8]) -> ([u8;64], usize) {
     (full_packet, packet.len()+4)
 }
 
-fn fmt_packet(packet: ([u8;64], usize)) -> heapless::String<512> {
+fn fmt_packet(packet: &[u8], size: usize) -> heapless::String<512> {
     let mut msg = heapless::String::<512>::new();
     let _ = ufmt::uwrite!(msg, "[");
-    for i in 0..packet.1 {
-        let byte = packet.0[i];
-        if i == packet.1-1 {
+    for i in 0..size {
+        let byte = packet[i];
+        if i == size-1 {
             let _ = ufmt::uwrite!(msg, "0x{:02X}", byte);
         }
         else
@@ -552,13 +675,14 @@ mod tests {
 
         let challenge_version = challenge[3];
         let ch = &challenge[4..];
-        if let Ok((packet, _ch1b)) = cmdauth1(challenge_version, ch) {
+        if let Ok((packet, ch1b)) = cmdauth1(challenge_version, ch) {
+            info!("{:x?}", ch1b);
             let send = build_packet(code, &packet);
             assert_eq!(send.0[19], expected_response[19]);
 
             let mut msg = heapless::String::<512>::new();
             let _ = ufmt::uwrite!(msg, "Sending packet: ");
-            let _ = msg.write_str(fmt_packet(send).as_str());
+            let _ = msg.write_str(fmt_packet(&send.0, send.1).as_str());
             debug!("{}", msg.as_str());
 
             assert_eq!(expected_response, send.0[..send.1]);
@@ -580,7 +704,7 @@ mod tests {
         let code: u8 = ResponseType::Ack as u8;
         let challenge_version = 0xD9;
 
-        let challenge1b: [u8; 8] = [0x1A, 0xC9, 0x21, 0x7A, 0xE9, 0x8F, 0xBE, 0x22];
+        let challenge1b: [u8; 16] = [0x1A, 0xC9, 0x21, 0x7A, 0xE9, 0x8F, 0xBE, 0x22, 0x54, 0x0a, 0x8c, 0xbb, 0xc1, 0xac, 0xf7, 0xfa];
 
         if let Ok(packet) = cmdauth2(challenge_version, &challenge, &challenge1b) {
             let send = build_packet(code, &packet);
@@ -588,7 +712,7 @@ mod tests {
 
             let mut msg = heapless::String::<512>::new();
             let _ = ufmt::uwrite!(msg, "Sending packet: ");
-            let _ = msg.write_str(fmt_packet(send).as_str());
+            let _ = msg.write_str(fmt_packet((&send.0), send.1).as_str());
             debug!("{}", msg.as_str());
 
             assert_eq!(expected_response, send.0[..send.1]);
@@ -596,6 +720,65 @@ mod tests {
             assert!(false, "cmdauth2 returned err");
         }
     }
+
+    #[test]
+    fn test_challenge_response_cmdauth1_go() {
+        let _ = embedded_logger::StdLogger::init();
+        let challenge: [u8; 13] = [0x5A, 0x0B, 0x80, 0xB3, 0x38, 0xCF, 0x3D, 0xCD, 0x8E, 0x17, 0x1E, 0x03, 0x90];
+        let expected_response: [u8; 20] = [
+            0xA5, 0x12, 0x06, 0x1C, 0x76, 0x41, 0xAA, 0xB1, 0x43, 0x8A, 0xF5, 0x0D, 0xF8, 0xF8, 0x84, 0x95, 0x45, 0x84, 0x3A, 0x39
+        ];
+
+        let code: u8 = ResponseType::Ack as u8;
+
+        let challenge_version = challenge[3];
+        let ch = &challenge[4..];
+        if let Ok((packet, ch1b)) = cmdauth1(challenge_version, ch) {
+            info!("{:x?}", ch1b);
+            let send = build_packet(code, &packet);
+            //assert_eq!(send.0[19], expected_response[19]);
+
+            let mut msg = heapless::String::<512>::new();
+            let _ = ufmt::uwrite!(msg, "Sending packet: ");
+            let _ = msg.write_str(fmt_packet((&send.0), send.1).as_str());
+            debug!("{}", msg.as_str());
+
+            assert_eq!(expected_response, send.0[..send.1]);
+        } else {
+            assert!(false, "cmdauth1 returned err");
+        }
+    }
+
+    #[test]
+    fn test_challenge_response_cmdauth2_go() {
+        let _ = embedded_logger::StdLogger::init();
+        let challenge: [u8; 12] = [0x5A, 0x0A, 0x81, 0xF0, 0x78, 0xB3, 0x21, 0xBD, 0x0A, 0x24, 0x16, 0xDD];
+        let expected_response: [u8;20] = [
+            0xA5, 0x12, 0x06, 0x8C, 0x39, 0xD6, 0x17, 0xD3, 0xD4, 0xF8,
+            0x95, 0xB8, 0x88, 0x8A, 0x13, 0xD2, 0x7E, 0x73, 0xB1, 0x0B,
+        ];
+
+
+        let code: u8 = ResponseType::Ack as u8;
+        let challenge_version = 0xB3;
+
+        let challenge1b = [0x4d, 0x7d, 0xb4, 0xbd, 0x1d, 0xb3, 0x51, 0xaf, 0x46, 0x80, 0x95, 0x65, 0x39, 0x98, 0xb4, 0x9f];
+
+        if let Ok(packet) = cmdauth2(challenge_version, &challenge, &challenge1b) {
+            let send = build_packet(code, &packet);
+            //assert_eq!(send.0[19], expected_response[19]);
+
+            let mut msg = heapless::String::<512>::new();
+            let _ = ufmt::uwrite!(msg, "Sending packet: ");
+            let _ = msg.write_str(fmt_packet((&send.0), send.1).as_str());
+            debug!("{}", msg.as_str());
+
+            assert_eq!(expected_response, send.0[..send.1]);
+        } else {
+            assert!(false, "cmdauth2 returned err");
+        }
+    }
+
 
     #[test]
     fn test_challenge_response_cmdauthgo() {
@@ -609,7 +792,7 @@ mod tests {
             let send = build_packet(code, &packet);
             let mut msg = heapless::String::<512>::new();
             let _ = ufmt::uwrite!(msg, "Sending packet: ");
-            let _ = msg.write_str(fmt_packet(send).as_str());
+            let _ = msg.write_str(fmt_packet((&send.0), send.1).as_str());
             debug!("{}", msg.as_str());
 
             assert_eq!(expected_response, send.0[..send.1]);
