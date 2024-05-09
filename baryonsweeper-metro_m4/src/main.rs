@@ -108,7 +108,7 @@ static mut USB_SERIAL: Option<SerialPort<UsbBus>> = None;
 fn poll_usb() {
     unsafe {
         if let Some(usb_dev) = USB_BUS.as_mut() {
-            if let Some(ref mut usb_serial) = &mut USB_SERIAL {
+            if let Some(ref mut usb_serial) = USB_SERIAL {
                 usb_dev.poll(&mut [usb_serial]);
 
                 // Make the other side happy
