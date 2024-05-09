@@ -10,7 +10,7 @@ edition = "2021"
 chip = "ATSAMD21G18A"
 
 [dependencies]
-baryonsweeper = { path = "../baryonsweeper", features=["itsybitsy_m0"] }
+baryonsweeper = { path = "../baryonsweeper", features=["itsybitsy_m0", "usb"] }
 embedded-logger = { path = "../embedded-logger", features=["usb", "rtt"]}
 fugit = "0.3.7"
 itsybitsy_m0 = { version = "0.13.0", features=["usb"] }
