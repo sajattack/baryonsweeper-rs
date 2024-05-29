@@ -10,7 +10,7 @@ edition = "2021"
 chip = "ATSAMD51J19A"
 
 [dependencies]
-baryonsweeper = { path = "../baryonsweeper", features=["metro_m4"]}
+baryonsweeper = { path = "../baryonsweeper", features=["metro_m4", "usb"]}
 embedded-logger = { path = "../embedded-logger", features=["usb", "rtt"] }
 metro_m4 = { version = "0.12.0", features=["usb"] }
 panic-rtt-target = { version = "0.1.2", features=["cortex-m"] }

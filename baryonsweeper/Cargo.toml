@@ -19,7 +19,6 @@ heapless = { version = "0.8.0", features=["ufmt"] }
 ufmt = "0.2.0"
 itsybitsy_m0 = { version = "0.13", optional=true }
 embedded-logger = { path = "../embedded-logger" }
-ecb = "0.1.2"
 log = "0.4.20"
 defmt = "0.3.6"
 cbc = "0.1.2"
@@ -31,3 +30,4 @@ rp2040 = []
 itsybitsy_m0 = ["dep:itsybitsy_m0"]
 std = ["embedded-logger/std", "log/std"]
 usb = ["embedded-logger/usb"]
+rtt = ["embedded-logger/rtt"]
