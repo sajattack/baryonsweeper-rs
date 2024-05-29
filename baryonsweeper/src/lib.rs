@@ -232,6 +232,11 @@ where
                         let packet = build_packet(ResponseType::Ack as u8, &response);
                         self.send_packet(&packet.0, packet.1);
                     }
+                    else {
+                        let response = [0xff; 8];
+                        let packet = build_packet(ResponseType::Ack as u8, &response);
+                        self.send_packet(&packet.0, packet.1); 
+                    }
                     info!("Challenge version: 0x{:x}", challenge_version);
                 },
                 Ok(Commands::CmdAuth2) => {
@@ -352,7 +357,9 @@ fn cmdauth1(version: u8, challenge: &[u8]) -> Result<([u8; 16], [u8; 16]), ()> {
         msg.clear();
     }
 
-    mix_challenge1(version, challenge, &mut data).unwrap();
+    if mix_challenge1(version, challenge, &mut data).is_err() {
+       return Err(())
+    }
 
     #[cfg(debug_assertions)]
     {
@@ -684,10 +691,11 @@ mod tests {
             let _ = ufmt::uwrite!(msg, "Sending packet: ");
             let _ = msg.write_str(fmt_packet(&send.0, send.1).as_str());
             debug!("{}", msg.as_str());
-
             assert_eq!(expected_response, send.0[..send.1]);
         } else {
-            assert!(false, "cmdauth1 returned err");
+            let packet = [0xff; 8];
+            let send = build_packet(code, &packet);
+            assert_eq!(expected_response, send.0[..send.1]);
         }
     }
 
@@ -734,7 +742,7 @@ mod tests {
         let challenge_version = challenge[3];
         let ch = &challenge[4..];
         if let Ok((packet, ch1b)) = cmdauth1(challenge_version, ch) {
-            info!("{:x?}", ch1b);
+            debug!("ch1b: {:x?}", ch1b);
             let send = build_packet(code, &packet);
             //assert_eq!(send.0[19], expected_response[19]);
 
@@ -742,10 +750,11 @@ mod tests {
             let _ = ufmt::uwrite!(msg, "Sending packet: ");
             let _ = msg.write_str(fmt_packet((&send.0), send.1).as_str());
             debug!("{}", msg.as_str());
-
             assert_eq!(expected_response, send.0[..send.1]);
         } else {
-            assert!(false, "cmdauth1 returned err");
+            let packet = [0xffu8; 8];
+            let send = build_packet(code, &packet);
+            assert_eq!(expected_response, send.0[..send.1]);
         }
     }
 
@@ -762,8 +771,9 @@ mod tests {
         let code: u8 = ResponseType::Ack as u8;
         let challenge_version = 0xB3;
 
-        let challenge1b = [0x4d, 0x7d, 0xb4, 0xbd, 0x1d, 0xb3, 0x51, 0xaf, 0x46, 0x80, 0x95, 0x65, 0x39, 0x98, 0xb4, 0x9f];
 
+        let challenge1b = [0x0d, 0xf8, 0xf8, 0x84, 0x95, 0x45, 0x84, 0x3a,
+                           0x4d, 0x84, 0x7f, 0x54, 0x7a, 0xd6, 0x2d, 0x77];
         if let Ok(packet) = cmdauth2(challenge_version, &challenge, &challenge1b) {
             let send = build_packet(code, &packet);
             //assert_eq!(send.0[19], expected_response[19]);
@@ -799,5 +809,10 @@ mod tests {
         } else {
             assert!(false, "cmdauthgo returned err");
         }
+    }
+
+    #[test]
+    fn test_cmdauth1_invalid_version() {
+        assert!(cmdauth1(0x55, &[0x00; 1]).is_err());
     }
 }
