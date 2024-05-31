@@ -32,7 +32,7 @@ cfg_if::cfg_if! {
         where U: usb_device::bus::UsbBus
         {
             fn enabled(&self, metadata: &Metadata) -> bool {
-                metadata.level() <= Level::Info
+                metadata.level() <= Level::Debug
             }
 
             fn log(&self, record: &Record) {
@@ -41,14 +41,25 @@ cfg_if::cfg_if! {
                         let mut log = self.log_buffer.borrow_ref_mut(cs);
                         let mut usb = self.usb_serial.borrow_ref_mut(cs);
                         let _ = write!(log, "{}: {}\r\n", record.level().as_str(), record.args());
-                        let _ = usb.write(log.as_bytes());
-                        let _ = usb.flush();
+                        let mut count = 0;
+                        while count < log.len() {
+                            match usb.write(&log.as_bytes()[count..]) {
+                                Ok(c) => {
+                                    count += c;
+                                }
+                                Err(_) => {}
+                            };
+                        }
                         let _ = log.clear();
                     });
                 }
             }
 
             fn flush(&self) {
+                critical_section::with(|cs| {
+                    let mut usb = self.usb_serial.borrow_ref_mut(cs);
+                    let _ = usb.flush();
+                });
             }
         }
     }

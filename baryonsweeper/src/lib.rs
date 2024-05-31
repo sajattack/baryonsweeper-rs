@@ -1,6 +1,6 @@
 #![cfg_attr(not(feature="std"), no_std)]
 
-use embedded_hal::{serial::{Read, Write}, timer::CountDown, digital::v2::OutputPin};
+use embedded_hal::{serial::{Read, Write}, timer::CountDown, digital::v2::OutputPin, blocking::delay::DelayMs};
 use nb::block;
 use num_enum::TryFromPrimitive;
 use aes::Aes128;
@@ -30,32 +30,36 @@ type TimeoutType = fugit::MicrosDurationU64;
 #[cfg(feature="itsybitsy_m0")]
 type TimeoutType = itsybitsy_m0::hal::time::Nanoseconds;
 
-pub struct BaryonSweeper<S, C, P, T> 
+pub struct BaryonSweeper<S, C, P, T, D> 
 where 
     S: Read<u8> + Write<u8>,
     C: CountDown,
     P: OutputPin,
     T: From<TimeoutType> + Clone,
+    D: DelayMs<u32>,
 {
     serial: S,
     timer: C,
     led_pin: P,
     timeout: T,
+    delay: D,
 }
     
-impl<S, C, P, T> BaryonSweeper<S, C, P, T>
+impl<S, C, P, T, D> BaryonSweeper<S, C, P, T, D>
 where 
     S: Read<u8> + Write<u8>,
     C: CountDown,
     P: OutputPin,
     T: From<TimeoutType> + Clone,
+    D: DelayMs<u32>,
 {
-    pub fn new(serial: S, timer: C, led_pin: P, timeout: T) -> BaryonSweeper<S, C, P, T> {
+    pub fn new(serial: S, timer: C, led_pin: P, timeout: T, delay: D) -> BaryonSweeper<S, C, P, T, D> {
         Self {
             serial,
             timer,
             led_pin,
             timeout,
+            delay,
         }
     }
 
@@ -120,24 +124,24 @@ where
         }
        
         
-        #[cfg(debug_assertions)]
-        {
-            let mut msg = heapless::String::<512>::new();
-            let _ = ufmt::uwrite!(msg, "Received packet: 0x5a, 0x{:02X} ", length).unwrap();
+        //#[cfg(debug_assertions)]
+        //{
+            let mut msg = heapless::String::<2048>::new();
+            let _ = ufmt::uwrite!(msg, "Received packet: 0x5A, 0x{:02X} ", length).unwrap();
             let _ = msg.write_str(fmt_packet(recv, length.into()).as_str());
             debug!("{}", msg.as_str());
-        }
+        //}
     }
 
 
     fn send_packet(&mut self, packet: &[u8], size: usize) {
-        #[cfg(debug_assertions)] 
-        {
-            let mut msg = heapless::String::<512>::new();
+        //#[cfg(debug_assertions)] 
+        //{
+            let mut msg = heapless::String::<2048>::new();
             let _ = ufmt::uwrite!(msg, "Sending packet: ");
             let _ = msg.write_str(fmt_packet(packet, size).as_str());
             debug!("{}", msg.as_str());
-        }
+        //}
         
         for i in 0..size {
             let _ = block!(self.serial.write(packet[i])).map_err(|_|());
@@ -228,33 +232,33 @@ where
                     let challenge = &recv[2..];
                     if let Ok((response, bchal)) = cmdauth1(challenge_version, challenge)
                     {
+                        info!("Challenge version: 0x{:x}", challenge_version);
                         challenge1b = bchal;
                         let packet = build_packet(ResponseType::Ack as u8, &response);
                         self.send_packet(&packet.0, packet.1);
                     }
                     else {
+                        info!("Challenge version: 0x{:x}", challenge_version);
                         let response = [0xff; 8];
                         let packet = build_packet(ResponseType::Ack as u8, &response);
                         self.send_packet(&packet.0, packet.1); 
                     }
-                    info!("Challenge version: 0x{:x}", challenge_version);
                 },
                 Ok(Commands::CmdAuth2) => {
                     let challenge = &recv[2..];
                     if let Ok(response) = cmdauth2(challenge_version, challenge, &challenge1b)
                     {
+                        info!("Challenge version: 0x{:x}", challenge_version);
                         let packet = build_packet(ResponseType::Ack as u8, &response);
                         self.send_packet(&packet.0, packet.1);
                     }
-                    info!("Challenge version: 0x{:x}", challenge_version);
                     if challenge_version == 0xeb || challenge_version == 0xb3 {
-                        let mut packet2 = [0u8; 64];
-                        packet2[0..4].copy_from_slice(&[0x5a, 0x02, 0x01, 0xa2]);
-                        self.send_packet(&packet2, 4);
+                        let packet2 = [0x5a, 0x02, 0x01, 0xa2];
+                        self.send_packet(&packet2, packet2.len());
                     }
                 },
                 Ok(Commands::CmdAuthGo) => {
-                    let screq = &recv[3..];
+                    let screq = &recv[1..];
                     if let Ok(response) = cmdauthgo(screq)
                     {
                         let packet = build_packet(ResponseType::Ack as u8, &response);
@@ -273,7 +277,7 @@ where
            }
 
            self.led_pin.set_high().map_err(|_|()).unwrap();
-
+           self.delay.delay_ms(1);
         }
     }
 
@@ -621,8 +625,8 @@ fn build_packet(code: u8, packet: &[u8]) -> ([u8;64], usize) {
     (full_packet, packet.len()+4)
 }
 
-fn fmt_packet(packet: &[u8], size: usize) -> heapless::String<512> {
-    let mut msg = heapless::String::<512>::new();
+fn fmt_packet(packet: &[u8], size: usize) -> heapless::String<2048> {
+    let mut msg = heapless::String::<2048>::new();
     let _ = ufmt::uwrite!(msg, "[");
     for i in 0..size {
         let byte = packet[i];
@@ -687,7 +691,7 @@ mod tests {
             let send = build_packet(code, &packet);
             assert_eq!(send.0[19], expected_response[19]);
 
-            let mut msg = heapless::String::<512>::new();
+            let mut msg = heapless::String::<2048>::new();
             let _ = ufmt::uwrite!(msg, "Sending packet: ");
             let _ = msg.write_str(fmt_packet(&send.0, send.1).as_str());
             debug!("{}", msg.as_str());
@@ -702,8 +706,8 @@ mod tests {
     #[test]
     fn test_challenge_response_cmdauth2() {
         let _ = embedded_logger::StdLogger::init();
-        let challenge: [u8; 12] = [0x5A, 0x0A, 0x81, 0x13, 0xF1, 0x06, 0x0B, 0x97, 0x9E, 0x9F, 0xF9, 0x38];
-        let expected_response: [u8;20] = [
+        let challenge = [0x5A, 0x0A, 0x81, 0x13, 0xF1, 0x06, 0x0B, 0x97, 0x9E, 0x9F, 0xF9, 0x38];
+        let expected_response  = [
             0xA5, 0x12, 0x06, 0xBA, 0x54, 0x76, 0x57, 0x8E, 0xAF, 0x4E,
             0x8F, 0xAD, 0xF2, 0xA3, 0x55, 0xDA, 0x10, 0xC2, 0x1D, 0xED,
         ];
@@ -712,13 +716,13 @@ mod tests {
         let code: u8 = ResponseType::Ack as u8;
         let challenge_version = 0xD9;
 
-        let challenge1b: [u8; 16] = [0x1A, 0xC9, 0x21, 0x7A, 0xE9, 0x8F, 0xBE, 0x22, 0x54, 0x0a, 0x8c, 0xbb, 0xc1, 0xac, 0xf7, 0xfa];
+        let challenge1b = [0x1A, 0xC9, 0x21, 0x7A, 0xE9, 0x8F, 0xBE, 0x22, 0x54, 0x0a, 0x8c, 0xbb, 0xc1, 0xac, 0xf7, 0xfa];
 
         if let Ok(packet) = cmdauth2(challenge_version, &challenge, &challenge1b) {
             let send = build_packet(code, &packet);
             assert_eq!(send.0[19], expected_response[19]);
 
-            let mut msg = heapless::String::<512>::new();
+            let mut msg = heapless::String::<2048>::new();
             let _ = ufmt::uwrite!(msg, "Sending packet: ");
             let _ = msg.write_str(fmt_packet((&send.0), send.1).as_str());
             debug!("{}", msg.as_str());
@@ -730,10 +734,10 @@ mod tests {
     }
 
     #[test]
-    fn test_challenge_response_cmdauth1_go() {
+    fn test_challenge_response_cmdauth1_go_b3() {
         let _ = embedded_logger::StdLogger::init();
-        let challenge: [u8; 13] = [0x5A, 0x0B, 0x80, 0xB3, 0x38, 0xCF, 0x3D, 0xCD, 0x8E, 0x17, 0x1E, 0x03, 0x90];
-        let expected_response: [u8; 20] = [
+        let challenge = [0x5A, 0x0B, 0x80, 0xB3, 0x38, 0xCF, 0x3D, 0xCD, 0x8E, 0x17, 0x1E, 0x03, 0x90];
+        let expected_response = [
             0xA5, 0x12, 0x06, 0x1C, 0x76, 0x41, 0xAA, 0xB1, 0x43, 0x8A, 0xF5, 0x0D, 0xF8, 0xF8, 0x84, 0x95, 0x45, 0x84, 0x3A, 0x39
         ];
 
@@ -746,7 +750,7 @@ mod tests {
             let send = build_packet(code, &packet);
             //assert_eq!(send.0[19], expected_response[19]);
 
-            let mut msg = heapless::String::<512>::new();
+            let mut msg = heapless::String::<2048>::new();
             let _ = ufmt::uwrite!(msg, "Sending packet: ");
             let _ = msg.write_str(fmt_packet((&send.0), send.1).as_str());
             debug!("{}", msg.as_str());
@@ -759,10 +763,10 @@ mod tests {
     }
 
     #[test]
-    fn test_challenge_response_cmdauth2_go() {
+    fn test_challenge_response_cmdauth2_go_b3() {
         let _ = embedded_logger::StdLogger::init();
-        let challenge: [u8; 12] = [0x5A, 0x0A, 0x81, 0xF0, 0x78, 0xB3, 0x21, 0xBD, 0x0A, 0x24, 0x16, 0xDD];
-        let expected_response: [u8;20] = [
+        let challenge = [0x5A, 0x0A, 0x81, 0xF0, 0x78, 0xB3, 0x21, 0xBD, 0x0A, 0x24, 0x16, 0xDD];
+        let expected_response = [
             0xA5, 0x12, 0x06, 0x8C, 0x39, 0xD6, 0x17, 0xD3, 0xD4, 0xF8,
             0x95, 0xB8, 0x88, 0x8A, 0x13, 0xD2, 0x7E, 0x73, 0xB1, 0x0B,
         ];
@@ -776,9 +780,9 @@ mod tests {
                            0x4d, 0x84, 0x7f, 0x54, 0x7a, 0xd6, 0x2d, 0x77];
         if let Ok(packet) = cmdauth2(challenge_version, &challenge, &challenge1b) {
             let send = build_packet(code, &packet);
-            //assert_eq!(send.0[19], expected_response[19]);
+            assert_eq!(send.0[19], expected_response[19]);
 
-            let mut msg = heapless::String::<512>::new();
+            let mut msg = heapless::String::<2048>::new();
             let _ = ufmt::uwrite!(msg, "Sending packet: ");
             let _ = msg.write_str(fmt_packet((&send.0), send.1).as_str());
             debug!("{}", msg.as_str());
@@ -787,6 +791,59 @@ mod tests {
         } else {
             assert!(false, "cmdauth2 returned err");
         }
+    }
+
+    #[test]
+    fn test_challenge_response_cmdauth1_go_eb() {
+        let _ = embedded_logger::StdLogger::init();
+        let challenge = [0x5A, 0x0B, 0x80, 0xEB, 0xDE, 0x26, 0xFF, 0x72, 0x99, 0xF6, 0x64, 0xFF, 0xC8];
+        let expected_response = [0xA5, 0x12, 0x06, 0xD6, 0x20, 0x94, 0xBC, 0xE1, 0x73, 0x17, 0xBD, 0x8B, 0x4B, 0xF6, 0x8E, 0xD4, 0xC0, 0x02, 0x03, 0xE1];
+        let code = ResponseType::Ack as u8;
+
+        let challenge_version = challenge[3];
+        let ch = &challenge[4..];
+        if let Ok((packet, ch1b)) = cmdauth1(challenge_version, ch) {
+            debug!("ch1b: {:x?}", ch1b);
+            let send = build_packet(code, &packet);
+            assert_eq!(send.0[19], expected_response[19]);
+
+            let mut msg = heapless::String::<2048>::new();
+            let _ = ufmt::uwrite!(msg, "Sending packet: ");
+            let _ = msg.write_str(fmt_packet((&send.0), send.1).as_str());
+            debug!("{}", msg.as_str());
+            assert_eq!(expected_response, send.0[..send.1]);
+        } else {
+            let packet = [0xffu8; 8];
+            let send = build_packet(code, &packet);
+            assert_eq!(expected_response, send.0[..send.1]);
+        }
+    }
+
+    #[test]
+    fn test_challenge_response_cmdauth2_go_eb() {
+        let _ = embedded_logger::StdLogger::init();
+        let challenge = [0x5A, 0x0A, 0x81, 0xE8, 0x60, 0xBF, 0xB1, 0x5F, 0x86, 0x8F, 0x77, 0x77];
+        let expected_response = [0xA5, 0x12, 0x06, 0x62, 0x38, 0x37, 0x5D, 0x4D, 0x5E, 0xC0,
+            0xEA, 0xCD, 0x3A, 0x74, 0xD4, 0xD9, 0xA0, 0x69, 0x98, 0xF6];
+        let ch1b = [0x8b, 0x4b, 0xf6, 0x8e, 0xd4, 0xc0, 0x02, 0x03, 0xe5, 0x60, 0xe7, 0x4a, 0x0d, 0x13, 0x5c, 0xf2];
+
+        let code: u8 = ResponseType::Ack as u8;
+        let challenge_version = 0xEB;
+
+        if let Ok(packet) = cmdauth2(challenge_version, &challenge, &ch1b) {
+            let send = build_packet(code, &packet);
+            assert_eq!(send.0[19], expected_response[19]);
+
+            let mut msg = heapless::String::<2048>::new();
+            let _ = ufmt::uwrite!(msg, "Sending packet: ");
+            let _ = msg.write_str(fmt_packet((&send.0), send.1).as_str());
+            debug!("{}", msg.as_str());
+
+            assert_eq!(expected_response, send.0[..send.1]);
+        } else {
+            assert!(false, "cmdauth2 returned err");
+        }
+
     }
 
 
@@ -800,7 +857,7 @@ mod tests {
     
         if let Ok(packet) = cmdauthgo(&screq) {
             let send = build_packet(code, &packet);
-            let mut msg = heapless::String::<512>::new();
+            let mut msg = heapless::String::<2048>::new();
             let _ = ufmt::uwrite!(msg, "Sending packet: ");
             let _ = msg.write_str(fmt_packet((&send.0), send.1).as_str());
             debug!("{}", msg.as_str());

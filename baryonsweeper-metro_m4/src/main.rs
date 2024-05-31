@@ -71,8 +71,8 @@ fn main() -> ! {
         USB_SERIAL = Some(SerialPort::new(bus_allocator));
         USB_BUS = Some(
             UsbDeviceBuilder::new(bus_allocator, UsbVidPid(0x2222, 0x3333))
-                .manufacturer("Fake company")
-                .product("Serial port")
+                .manufacturer("Sajattack")
+                .product("BaryonSweeper-rs")
                 .serial_number("TEST")
                 .device_class(USB_CLASS_CDC)
                 .build(),
