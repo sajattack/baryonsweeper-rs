@@ -88,9 +88,10 @@ fn main() -> ! {
     );
 
     let timer = Timer::new(pac.TIMER, &mut pac.RESETS, &clocks);
-    let delay = cortex_m::delay::Delay::new(core.SYST, clocks.system_clock.freq().to_Hz());
+    let mut timer = timer .count_down();
+    let mut delay = cortex_m::delay::Delay::new(core.SYST, clocks.system_clock.freq().to_Hz());
 
-    let led_pin = pins.led.into_push_pull_output();
+    let mut led_pin = pins.led.into_push_pull_output();
 
     type UartPins = (
         hal::gpio::Pin<Gpio0, hal::gpio::FunctionUart, hal::gpio::PullNone>,
@@ -104,7 +105,7 @@ fn main() -> ! {
         pins.gpio1.reconfigure(),
     );
 
-    let uart = uart::UartPeripheral::new(pac.UART0, uart_pins, &mut pac.RESETS)
+    let mut uart = uart::UartPeripheral::new(pac.UART0, uart_pins, &mut pac.RESETS)
         .enable(
             UartConfig::new(19200.Hz(), DataBits::Eight, Some(Parity::Even), StopBits::One),
             clocks.peripheral_clock.freq(),
@@ -150,7 +151,7 @@ fn main() -> ! {
         unsafe { let _ = log::set_logger_racy( LOGGER.as_ref().unwrap() ).map(|()| log::set_max_level_racy(LevelFilter::Debug)); }
     }
     
-    let mut baryon_sweeper = BaryonSweeper::new(uart, timer.count_down(), led_pin, 500.millis(), delay) ;
+    let mut baryon_sweeper = BaryonSweeper::new(&mut uart, &mut timer, &mut led_pin, 500.millis(), &mut delay) ;
     defmt::println!("Starting Sweep!");
 
     baryon_sweeper.sweep();

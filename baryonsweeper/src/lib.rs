@@ -30,7 +30,10 @@ type TimeoutType = fugit::MicrosDurationU64;
 #[cfg(feature="itsybitsy_m0")]
 type TimeoutType = itsybitsy_m0::hal::time::Nanoseconds;
 
-pub struct BaryonSweeper<S, C, P, T, D> 
+#[cfg(feature="test")]
+type TimeoutType = embedded_time::duration::Nanoseconds;
+
+pub struct BaryonSweeper<'a, S, C, P, T, D> 
 where 
     S: Read<u8> + Write<u8>,
     C: CountDown,
@@ -38,14 +41,14 @@ where
     T: From<TimeoutType> + Clone,
     D: DelayMs<u32>,
 {
-    serial: S,
-    timer: C,
-    led_pin: P,
+    serial: &'a mut S,
+    timer: &'a mut C,
+    led_pin: &'a mut P,
     timeout: T,
-    delay: D,
+    delay: &'a mut D,
 }
     
-impl<S, C, P, T, D> BaryonSweeper<S, C, P, T, D>
+impl<'a, S, C, P, T, D> BaryonSweeper<'a, S, C, P, T, D>
 where 
     S: Read<u8> + Write<u8>,
     C: CountDown,
@@ -53,7 +56,7 @@ where
     T: From<TimeoutType> + Clone,
     D: DelayMs<u32>,
 {
-    pub fn new(serial: S, timer: C, led_pin: P, timeout: T, delay: D) -> BaryonSweeper<S, C, P, T, D> {
+    pub fn new(serial: &'a mut S, timer: &'a mut C, led_pin: &'a mut P, timeout: T, delay: &'a mut D) -> BaryonSweeper<'a, S, C, P, T, D> {
         Self {
             serial,
             timer,
@@ -280,7 +283,6 @@ where
            self.delay.delay_ms(1);
         }
     }
-
 }
 
 fn cmd_read_status() -> [u8;3] {
@@ -485,6 +487,7 @@ fn cmdauth2(challenge_version: u8, _challenge: &[u8], ch1b: &[u8]) -> Result<[u8
 fn cmdauthgo(screq: &[u8]) -> Result<[u8; 40], ()>
 {
     info!("CmdAuthGo");
+    info!("Passed in: {:x?}", screq);
     let mut enc = [[0u8; 16]; 2];
     enc[0].copy_from_slice(&screq[8..24]);
     enc[1].copy_from_slice(&screq[24..40]);
@@ -499,6 +502,9 @@ fn cmdauthgo(screq: &[u8]) -> Result<[u8; 40], ()>
 
 
     let decrypted = blocks.as_slice();
+
+    info!("decrypted1: {:x?}", decrypted[1]);
+    info!("GO_SECRET: {:x?}", GO_SECRET);
 
     if decrypted[1].as_slice() == GO_SECRET {
         info!("Go handshake request is valid");
@@ -866,6 +872,42 @@ mod tests {
         } else {
             assert!(false, "cmdauthgo returned err");
         }
+    }
+
+    #[test]
+    fn test_ehal_mock_cmdauthgo() {
+        use embedded_hal_mock::eh0::{serial, timer, digital, delay};
+        use embedded_time::duration::*;
+        use embedded_hal::timer::CountDown;
+
+        let mut clock = timer::MockClock::new();
+        let mut timer = clock.get_timer();
+        let mut expectations: [digital::Transaction; 0] = [];
+        let mut led = digital::Mock::new(&expectations);
+        let timeout = 500.milliseconds();
+        let mut delay = delay::NoopDelay::new();
+
+
+        let _ = embedded_logger::StdLogger::init();
+
+        let packet = [0x5A, 0x2A, 0x90, 0x20, 0x10, 0x00, 0x06, 0x82, 0x82, 0x82, 0x82, 0xCB, 0xA3, 0xDB, 0xAC, 0x00, 0xDF, 0x26, 0xF8, 0xDD, 0x5B, 0x0D, 0xAC, 0x91, 0x9A, 0xCF, 0x0B, 0x63, 0x26, 0x06, 0x18, 0xE6, 0x30, 0x4F, 0xDF, 0xE1, 0x6C, 0xEE, 0xA5, 0x16, 0x4E, 0x94, 0x15, 0xED];
+
+        let expected_response = [0xA5, 0x2A, 0x06, 0x20, 0x01, 0x00, 0x00, 0x82, 0x82, 0x82, 0x82, 0x82, 0x62, 0xDA, 0xD6, 0x79, 0x3C, 0x82, 0x92, 0x50, 0xEB, 0xC8, 0x86, 0x37, 0x23, 0x49,0x49,0xF5, 0xE6, 0x97, 0xC2, 0xF0, 0x76, 0x05, 0x73, 0xD7, 0x59, 0x2D, 0xC6, 0xE5, 0x27,0x5F,0x6D,0x22];
+
+        let ts = serial::Transaction::read_many(packet);
+        let mut ser = serial::Mock::new(&[ts]);
+
+        let mut bs = BaryonSweeper::new(&mut ser, &mut timer, &mut led, timeout, &mut delay);
+        let mut recv_buffer = [0u8; 64];
+        let mut length = 0;
+        bs.receive_packet(&mut recv_buffer, &mut length);
+        assert_eq!(length, 41);
+        let response = cmdauthgo(&recv_buffer[1..]).unwrap();
+        let code = ResponseType::Ack as u8;
+        let send = build_packet(code, &response);
+        assert_eq!(expected_response, send.0[..send.1]);
+        ser.done();
+        led.done();
     }
 
     #[test]

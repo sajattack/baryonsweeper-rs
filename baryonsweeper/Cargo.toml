@@ -22,9 +22,13 @@ embedded-logger = { path = "../embedded-logger" }
 log = "0.4.20"
 defmt = "0.3.6"
 cbc = "0.1.2"
+embedded-time = { version = "0.12.1", optional=true }
 
+[dev-dependencies]
+embedded-hal-mock = {version = "0.11.0", features=["eh0", "embedded-time"]}
 
 [features]
+test = ["dep:embedded-time"]
 metro_m4 = []
 rp2040 = []
 itsybitsy_m0 = ["dep:itsybitsy_m0"]
