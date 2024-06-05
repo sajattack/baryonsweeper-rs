@@ -4,7 +4,7 @@
 use core::ptr::addr_of_mut;
 
 use bsp::{entry, hal::{self, gpio::bank0::{Gpio0, Gpio1}, uart::Parity}};
-use log::{LevelFilter, info, debug};
+use log::LevelFilter;
 
 use defmt_rtt as _;
 
@@ -16,7 +16,7 @@ use rp_pico as bsp;
 use bsp::hal::{
     Clock,
     clocks::init_clocks_and_plls,
-    pac::{self, interrupt, SYST},
+    pac::{self, interrupt},
     sio::Sio,
     watchdog::Watchdog,
     Timer,
