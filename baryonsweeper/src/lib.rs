@@ -18,8 +18,8 @@ use consts::*;
 
 #[cfg(any(feature="std", feature="usb"))]
 use log::{info, debug};
-#[cfg(feature="rtt")]
-use defmt::{info, debug};
+//#[cfg(any(feature="rtt", not(feature="usb")))]
+//use defmt::{info, debug};
 
 #[cfg(feature="metro_m4")]
 type TimeoutType = fugit::NanosDurationU32;
@@ -941,13 +941,68 @@ mod tests {
         let mut length = 0;
         let mut challenge_version = 0;
         let mut challenge1b = [0u8; 16];
-        /*bs.receive_packet(&mut recv_buffer, &mut length);
-        assert_eq!(length, 41);
-        let response = cmdauthgo(&recv_buffer[1..]).unwrap();
-        let code = ResponseType::Ack as u8;
-        let send = build_packet(code, &response);
-        assert_eq!(cmdauthgo_response, send.0[..send.1]);*/
         for _ in 0..12 {
+            bs.sweep_iter(&mut length, &mut  challenge_version, &mut challenge1b);
+        }
+        ser.done();
+        led.done();
+
+    }
+
+    #[test]
+    fn test_ehal_mock_cmdauth1_2_go_eb() {
+        let _ = embedded_logger::StdLogger::init();
+
+        let cmdauth1_challenge = [0x5A, 0x0B, 0x80, 0xEB, 0xDE, 0x26, 0xFF, 0x72, 0x99, 0xF6, 0x64, 0xFF, 0xC8];
+        let cmdauth1_response = [0xA5, 0x12, 0x06, 0xD6, 0x20, 0x94, 0xBC, 0xE1, 
+                                0x73, 0x17, 0xBD, 0x8B, 0x4B, 0xF6, 0x8E, 0xD4, 0xC0, 0x02, 0x03, 0xE1];
+
+
+        let cmdauth2_challenge = [0x5A, 0x0A, 0x81, 0xE8, 0x60, 0xBF, 0xB1, 0x5F, 0x86, 0x8F, 0x77, 0x77];
+        let cmdauth2_response  = [0xA5, 0x12, 0x06, 0x62, 0x38, 0x37, 0x5D, 0x4D, 0x5E, 0xC0,
+                                  0xEA, 0xCD, 0x3A, 0x74, 0xD4, 0xD9, 0xA0, 0x69, 0x98, 0xF6];
+
+        let cmdreadstatus_send = [0x5a, 0x02, 0x01, 0xa2];
+        let cmdreadstatus_response = [0xa5, 0x05, 0x06, 0x10, 0xc3, 0x06, 0x76];
+
+        use embedded_hal_mock::eh0::{serial, timer, digital, delay};
+        use embedded_time::duration::*;
+
+        let clock = timer::MockClock::new();
+        let mut timer = clock.get_timer();
+        let led_expectations = [
+            digital::Transaction::set(digital::State::Low),
+            digital::Transaction::set(digital::State::High),
+            digital::Transaction::set(digital::State::Low),
+            digital::Transaction::set(digital::State::High),
+            digital::Transaction::set(digital::State::Low),
+            digital::Transaction::set(digital::State::High),
+        ];
+        let mut led = digital::Mock::new(&led_expectations);
+        let timeout = 500.milliseconds();
+        let mut delay = delay::NoopDelay::new();
+
+
+        let _ = embedded_logger::StdLogger::init();
+
+        let serial_transactions = [
+            serial::Transaction::read_many(cmdauth1_challenge),
+            serial::Transaction::write_many(cmdauth1_response),
+            serial::Transaction::read_many(cmdauth2_challenge),
+            serial::Transaction::write_many(cmdauth2_response),
+            serial::Transaction::write_many(cmdreadstatus_send),
+            serial::Transaction::read_many(cmdreadstatus_send),
+            serial::Transaction::write_many(cmdreadstatus_response),
+            serial::Transaction::read_many([]),
+        ];
+
+        let mut ser = serial::Mock::new(&serial_transactions);
+
+        let mut bs = BaryonSweeper::new(&mut ser, &mut timer, &mut led, timeout, &mut delay);
+        let mut length = 0;
+        let mut challenge_version = 0;
+        let mut challenge1b = [0u8; 16];
+        for _ in 0..3 {
             bs.sweep_iter(&mut length, &mut  challenge_version, &mut challenge1b);
         }
         ser.done();

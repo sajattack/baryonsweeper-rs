@@ -34,6 +34,7 @@ optional = true
 [features]
 usb = [ "usb-device", "usbd-serial" ]
 default = ["usb"]
+rtt = ["baryonsweeper/rtt", "embedded-logger/rtt"]
 
 # cargo build/run
 [profile.dev]
