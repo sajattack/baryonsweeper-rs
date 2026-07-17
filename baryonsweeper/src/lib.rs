@@ -31,7 +31,8 @@ type TimeoutType = fugit::MicrosDurationU64;
 type TimeoutType = itsybitsy_m0::hal::time::Nanoseconds;
 
 #[cfg(feature="test")]
-type TimeoutType = embedded_time::duration::Nanoseconds;
+type TimeoutType = embedded_time::duration::Milliseconds;
+
 
 pub struct BaryonSweeper<'a, S, C, P, T, D> 
 where 
@@ -107,9 +108,18 @@ where
     T: core::convert::From<TimeoutType> ,<C as CountDown>::Time: From<T>
     {
         loop {
-            //info!("Waiting for 5a");
-            if let Ok(0x5a) = block!(self.serial.read())  {
-                break;
+            info!("Waiting for 5a");
+            cfg_if::cfg_if! {
+                if #[cfg(feature="std")] {
+                    use embedded_time::duration::Milliseconds;
+                    if let Ok(0x5a) = self.read_with_timeout(Milliseconds::new(5000).into())  {
+                        break;
+                    }
+                } else {
+                    if let Ok(0x5a) = self.read_with_timeout(TimeoutType::millis(5000).into())  {
+                        break;
+                    }
+                }
             }
         }
         let length = block!(self.serial.read()).map_err(|_|()).unwrap();
@@ -422,6 +432,9 @@ fn cmdauthgo(screq: &[u8]) -> Result<[u8; 40], ()>
         info!("Go handshake request is valid");
     } else {
         info!("Invalid request from Syscon");
+        let mut msg = heapless::String::<2048>::new();
+        let _ = msg.write_str(fmt_packet(decrypted[1].as_slice(), decrypted[1].as_slice().len()).as_str());
+        debug!("{}", msg.as_str());
         return Err(())
     }
 
@@ -788,14 +801,14 @@ mod tests {
 
     #[test]
     fn test_ehal_mock_cmdauthgo() {
+        use embedded_time::duration::Milliseconds;
         use embedded_hal_mock::eh0::{serial, timer, digital, delay};
-        use embedded_time::duration::*;
 
         let clock = timer::MockClock::new();
         let mut timer = clock.get_timer();
         let expectations: [digital::Transaction; 0] = [];
         let mut led = digital::Mock::new(&expectations);
-        let timeout = 500.milliseconds();
+        let timeout = Milliseconds::new(500);
         let mut delay = delay::NoopDelay::new();
 
 
@@ -823,9 +836,8 @@ mod tests {
 
     #[test]
     fn test_ehal_mock_all() {
-
+        use embedded_time::duration::Milliseconds;
         use embedded_hal_mock::eh0::{serial, timer, digital, delay};
-        use embedded_time::duration::*;
 
         let clock = timer::MockClock::new();
         let mut timer = clock.get_timer();
@@ -856,7 +868,7 @@ mod tests {
             digital::Transaction::set(digital::State::High),
         ];
         let mut led = digital::Mock::new(&led_expectations);
-        let timeout = 500.milliseconds();
+        let timeout = Milliseconds::new(500);
         let mut delay = delay::NoopDelay::new();
 
 
@@ -951,6 +963,7 @@ mod tests {
 
     #[test]
     fn test_ehal_mock_cmdauth1_2_go_eb() {
+        use embedded_time::duration::Milliseconds;
         let _ = embedded_logger::StdLogger::init();
 
         let cmdauth1_challenge = [0x5A, 0x0B, 0x80, 0xEB, 0xDE, 0x26, 0xFF, 0x72, 0x99, 0xF6, 0x64, 0xFF, 0xC8];
@@ -966,7 +979,6 @@ mod tests {
         let cmdreadstatus_response = [0xa5, 0x05, 0x06, 0x10, 0xc3, 0x06, 0x76];
 
         use embedded_hal_mock::eh0::{serial, timer, digital, delay};
-        use embedded_time::duration::*;
 
         let clock = timer::MockClock::new();
         let mut timer = clock.get_timer();
@@ -979,7 +991,7 @@ mod tests {
             digital::Transaction::set(digital::State::High),
         ];
         let mut led = digital::Mock::new(&led_expectations);
-        let timeout = 500.milliseconds();
+        let timeout = Milliseconds::new(500);
         let mut delay = delay::NoopDelay::new();
 
 
