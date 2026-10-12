@@ -37,3 +37,9 @@ Refer to [psdevwiki](https://www.psdevwiki.com/psp/Psp-3000_Jigkick) for a detai
 This project outputs logs over the USB TTY ACM Interface on most boards, or sometimes another free UART on the microcontroller.
 To read the USB logs, connect PuTTY to the associated COM port on Windows, or minicom/picocom to the `ttyACMx`on linux.
 The `elf2uf2-rs -d -s` command above should also do this more automagically.
+
+## Running tests
+```sh
+cd baryonsweeper
+cargo test --features=std,test --release -- --no-capture
+```
