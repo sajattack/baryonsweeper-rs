@@ -618,7 +618,7 @@ mod tests {
         let challenge_version = challenge[3];
         let ch = &challenge[4..];
         if let Ok((packet, ch1b)) = cmdauth1(challenge_version, ch) {
-            info!("{:x?}", ch1b);
+            info!("{:02X?}", ch1b);
             let send = build_packet(code, &packet);
             assert_eq!(send.0[19], expected_response[19]);
 
@@ -677,7 +677,7 @@ mod tests {
         let challenge_version = challenge[3];
         let ch = &challenge[4..];
         if let Ok((packet, ch1b)) = cmdauth1(challenge_version, ch) {
-            debug!("ch1b: {:x?}", ch1b);
+            debug!("ch1b: {:02X?}", ch1b);
             let send = build_packet(code, &packet);
             assert_eq!(send.0[19], expected_response[19]);
 
@@ -734,7 +734,7 @@ mod tests {
         let challenge_version = challenge[3];
         let ch = &challenge[4..];
         if let Ok((packet, ch1b)) = cmdauth1(challenge_version, ch) {
-            debug!("ch1b: {:x?}", ch1b);
+            debug!("ch1b: {:02X?}", ch1b);
             let send = build_packet(code, &packet);
             assert_eq!(send.0[19], expected_response[19]);
 
