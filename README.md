@@ -41,5 +41,5 @@ The `elf2uf2-rs -d -s` command above should also do this more automagically.
 ## Running tests
 ```sh
 cd baryonsweeper
-cargo test --features=std,test --release -- --no-capture
+cargo test --features=std,test --release -- --no-capture --test-threads 1
 ```
